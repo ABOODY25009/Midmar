@@ -1,33 +1,58 @@
 <!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>لوحة المتصدرات – مِضمار</title><link rel="stylesheet" href="/style.css">
-<style>body{background:#0B2B22;color:#fff;overflow-x:hidden}.hd{display:flex;gap:1em;align-items:center;padding:1em 2vw;flex-wrap:wrap}.hd h1{margin:0;font-size:clamp(1.6rem,3.4vw,3rem)}
-.hd .btn{background:rgba(255,255,255,.1);color:#fff;border-color:rgba(255,255,255,.3)}.st{display:flex;gap:2em;padding:0 2vw;font-size:clamp(1rem,1.8vw,1.6rem);color:#BFE3D5}
-.podium{display:flex;gap:1.2vw;justify-content:center;align-items:flex-end;padding:2vh 2vw;min-height:30vh}.pod{flex:1;max-width:30vw;border-radius:16px 16px 0 0;text-align:center;padding:1em .5em;color:#12263A}
-.pod b{display:block;font-size:clamp(1.3rem,3vw,2.8rem)}.pod .sc{font-size:clamp(1.6rem,4vw,3.6rem);font-weight:700}.p1{background:#F2B705;height:30vh}.p2{background:#D5DDE5;height:23vh}.p3{background:#D99A5B;height:18vh}
-.lanes{padding:0 2vw 3vh;position:relative}.lane{position:absolute;inset-inline:2vw;height:7vh;min-height:48px;display:flex;align-items:center;gap:1vw;padding:0 1.2vw;border-radius:12px;background:rgba(255,255,255,.07);border-bottom:2px dashed rgba(255,255,255,.18);transition:transform .7s cubic-bezier(.2,.8,.2,1);font-size:clamp(1.1rem,2.2vw,2rem)}
-.lane .rk{width:2.2em;font-weight:700;color:var(--gold)}.lane .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.lane .run{position:absolute;inset-inline-start:0;bottom:0;height:5px;background:var(--gold);border-radius:3px;transition:width .7s}
-.lane.up{background:rgba(242,183,5,.28)}.msg{text-align:center;font-size:2.4vw;padding:15vh 2vw;color:#BFE3D5}canvas{position:fixed;inset:0;pointer-events:none;z-index:9}
-.tg{background:var(--gold);color:#12263A;border-radius:99px;padding:0 .6em;font-size:.6em}</style></head><body>
-<div class=hd><h1 id=t>لوحة المتصدرات</h1><span style="flex:1"></span><button class=btn id=fs>ملء الشاشة</button></div>
-<div class=st><span id=fin></span><span id=pl></span></div><div class=podium id=pod></div><div class=lanes id=lanes></div><canvas id=cv></canvas>
-<script src="/socket.io/socket.io.js"></script><script>
+<title>شاشة المسابقة – مِضمار</title><link rel="stylesheet" href="/style.css">
+<style>[hidden]{display:none!important}body{background:#0B2B22;color:#fff;overflow-x:hidden}
+.hd{display:flex;gap:1em;align-items:center;padding:1em 2vw;flex-wrap:wrap}.hd h1{margin:0;font-size:clamp(1.5rem,3vw,2.8rem)}.hd small{color:#BFE3D5;font-size:clamp(1rem,1.5vw,1.4rem)}.sp{flex:1}
+.hd .btn{background:rgba(255,255,255,.1);color:#fff;border-color:rgba(255,255,255,.3)}
+.stage{display:flex;gap:2.5vw;padding:1vh 2vw 3vh;align-items:flex-start}.main{flex:1;min-width:0}
+.side{flex:0 0 min(38vw,72vh);text-align:center;transition:flex-basis .9s cubic-bezier(.2,.8,.2,1)}.live .side{flex-basis:15vw}
+.side img{width:100%;aspect-ratio:1;background:#fff;border-radius:18px;padding:1.2vw;display:block}.side.off img{opacity:.3}
+.side .cd{font-size:clamp(1rem,1.6vw,1.6rem);margin-top:.6em;color:#BFE3D5}.side .cd b{color:var(--gold);font-size:1.5em;letter-spacing:.1em}.side .url{direction:ltr;font-size:clamp(.9rem,1.3vw,1.3rem);word-break:break-all;color:#BFE3D5}.live .url,.live .side button{display:none}
+.how{font-size:clamp(1.3rem,2.4vw,2.4rem);line-height:1.9;padding-inline-start:1.2em}.lobby h2{font-size:clamp(2rem,4.5vw,4.5rem);margin:.1em 0}
+.count{font-size:clamp(1.4rem,2.6vw,2.6rem);margin:.6em 0}.count b{color:var(--gold);font-size:1.6em}.chips{display:flex;flex-wrap:wrap;gap:.6vw}
+.chip{background:rgba(255,255,255,.12);border-radius:99px;padding:.15em .9em;font-size:clamp(1.1rem,2vw,2rem);animation:pop .5s cubic-bezier(.3,1.6,.5,1)}
+.ann{background:linear-gradient(135deg,#F2B705,#E8A200);color:#12263A;border-radius:22px;padding:2.5vh 2.5vw;text-align:center;margin-bottom:2.5vh}.ann.pop{animation:pop .8s cubic-bezier(.3,1.5,.5,1)}
+.ann .k{font-size:clamp(1.6rem,3.6vw,3.6rem);font-weight:700}.ann .nm{font-size:clamp(2.4rem,6.5vw,6.5rem);font-weight:700;line-height:1.2}.ann .tm{font-size:clamp(1.3rem,2.6vw,2.6rem)}.ann .sub{margin-top:.5em;font-size:clamp(1rem,1.7vw,1.7rem);opacity:.8}
+.podium{display:flex;gap:1.2vw;justify-content:center;align-items:flex-end;margin-bottom:2vh;min-height:26vh}.pod{flex:1;max-width:28vw;border-radius:16px 16px 0 0;text-align:center;padding:.8em .5em;color:#12263A;animation:pop .7s}
+.pod b{display:block;font-size:clamp(1.2rem,2.6vw,2.6rem)}.pod .sc{font-size:clamp(1.6rem,3.8vw,3.8rem);font-weight:700}.p1{background:#F2B705;height:27vh}.p2{background:#D5DDE5;height:21vh}.p3{background:#D99A5B;height:16vh}
+.lanes{position:relative}.lane{position:absolute;inset-inline:0;display:flex;align-items:center;gap:1vw;padding:0 1.2vw;border-radius:12px;background:rgba(255,255,255,.07);border-bottom:2px dashed rgba(255,255,255,.18);transition:transform .8s cubic-bezier(.2,.8,.2,1),background .5s;font-size:clamp(1.1rem,2.1vw,2rem)}
+.lane.first{background:rgba(242,183,5,.3);box-shadow:inset 0 0 0 3px #F2B705}.lane .rk{width:2.4em;font-weight:700;color:var(--gold)}.lane .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tg{background:var(--gold);color:#12263A;border-radius:99px;padding:0 .6em;font-size:.6em}.msg{text-align:center;font-size:clamp(1.5rem,3vw,3rem);padding:12vh 2vw;color:#BFE3D5}
+canvas{position:fixed;inset:0;pointer-events:none;z-index:9}@keyframes pop{from{transform:scale(.6);opacity:0}to{transform:none;opacity:1}}
+@media(max-width:800px){.stage{flex-direction:column}.side,.live .side{flex:none;width:min(70vw,300px);margin:auto}}
+</style></head><body>
+<div class=hd><div><h1 id=t>مِضمار</h1><small id=tc></small></div><span class=sp></span><a class=btn href="/#/quizzes">لوحة المعلمة</a><button class=btn id=fs>ملء الشاشة</button></div>
+<div class=stage id=stage><section class=main>
+ <div class=lobby id=lobby><h2>انضمي إلى المسابقة</h2><ol class=how><li>افتحي كاميرا الجوال وامسحي الرمز</li><li>اكتبي اسم مجموعتكم</li><li>جوال واحد لكل مجموعة</li></ol>
+  <div class=count><b id=n>0</b> مجموعة انضمّت</div><p id=closed hidden style="color:var(--gold);font-size:1.6em">الانضمام مغلق حاليًا</p><div class=chips id=names></div></div>
+ <div class=ann id=ann hidden><div class=k>اكتمل الفريق الأول!</div><div class=nm id=fn></div><div class=tm>الزمن <b id=ft></b> · الدرجة <b id=fsr></b></div><div class=sub id=pg></div></div>
+ <div class=podium id=podium hidden></div><div class=lanes id=lanes hidden></div><div class=msg id=msg hidden>ستُعلن النتائج بعد قليل…</div>
+</section><aside class=side id=side><img id=qr alt="رمز QR للانضمام"><div class=cd>الرمز <b id=cd></b></div><div class=url id=url></div><button class="btn" id=cp style="margin-top:.6em">نسخ رابط المشاركة</button></aside></div>
+<canvas id=cv></canvas><script src="/socket.io/socket.io.js"></script><script>
 const code=location.pathname.split('/').pop(),$=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const dur=s=>s>=60?`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`:s+'ث';let prev={},winner=null,H=0;
+const dur=s=>String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');const seen=new Set();let prev={},firstKey=null,doneKey=null;
 $('fs').onclick=()=>document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen();
+$('cp').onclick=()=>navigator.clipboard.writeText(location.origin+'/j/'+code).then(()=>{$('cp').textContent='تم النسخ ✔';setTimeout(()=>$('cp').textContent='نسخ رابط المشاركة',1800)});
 const sock=io();sock.on('connect',()=>sock.emit('watch',code));sock.on('board',draw);
-function draw(d){$('t').textContent='لوحة المتصدرات – '+d.title;$('fin').textContent='أنهت المسابقة: '+d.finished;$('pl').textContent='لا تزال تلعب: '+d.playing;
- if(d.hidden){$('pod').innerHTML='';$('lanes').innerHTML='<div class=msg>ستُعلن النتائج بعد قليل…</div>';$('lanes').style.height='auto';return}
- if(!d.rows.length){$('pod').innerHTML='';$('lanes').innerHTML=`<div class=msg>بانتظار المجموعات… رمز الدخول <b style="color:var(--gold)">${d.code}</b></div>`;$('lanes').style.height='auto';return}
- const top=d.rows.filter(r=>r.rank<=3&&(r.score>0||d.rows.length<4)).slice(0,3),order=[2,1,3].map(k=>top.find(r=>r.rank===k)||top.filter(r=>r.rank<=k)[k-1]).filter(Boolean);
- $('pod').innerHTML=[...new Map(order.map(r=>[r.id,r])).values()].map(r=>`<div class="pod p${Math.min(r.rank,3)}"><b>${r.rank===1?'🥇':r.rank===2?'🥈':'🥉'} ${esc(r.name)}${r.tie?' <span class=tg>تعادل</span>':''}</b><div class=sc>${r.score}</div><div>${r.correct} صحيحة · ${dur(r.duration)}</div></div>`).join('');
- const L=$('lanes'),rowH=Math.max(48,innerHeight*.075),gap=8;L.style.height=d.rows.length*(rowH+gap)+'px';
- d.rows.forEach((r,i)=>{let e=document.getElementById('r'+r.id);if(!e){e=document.createElement('div');e.id='r'+r.id;e.className='lane';e.style.transform=`translateY(${i*(rowH+gap)+40}px)`;L.append(e)}
-  e.style.height=rowH+'px';e.innerHTML=`<span class=rk>${r.rank}</span><span class=nm>${esc(r.name)}${r.tie?' <span class=tg>تعادل</span>':''}</span><span>${r.score}/${d.totalPoints}</span><span style="opacity:.7">${r.correct}✓</span><span style="opacity:.7">${dur(r.duration)}</span><span>${r.done?'✔':'…'}</span><i class=run style="width:${d.totalPoints?100*r.score/d.totalPoints:0}%"></i>`;
-  requestAnimationFrame(()=>e.style.transform=`translateY(${i*(rowH+gap)}px)`);if(prev[r.id]&&prev[r.id]>r.rank){e.classList.add('up');setTimeout(()=>e.classList.remove('up'),1500)}});
- [...L.children].forEach(e=>{if(!d.rows.some(r=>'r'+r.id===e.id)&&e.id)e.remove()});
- prev=Object.fromEntries(d.rows.map(r=>[r.id,r.rank]));
- if(d.playing===0&&d.finished>0&&d.rows[0].score>=0&&winner!==d.rows[0].id+':'+d.rows[0].score){winner=d.rows[0].id+':'+d.rows[0].score;confetti()}}
-function confetti(){if(matchMedia('(prefers-reduced-motion:reduce)').matches)return;const c=$('cv'),x=c.getContext('2d');c.width=innerWidth;c.height=innerHeight;
- const P=Array.from({length:180},()=>({x:Math.random()*c.width,y:-20-Math.random()*c.height*.5,v:3+Math.random()*5,r:4+Math.random()*6,c:['#F2B705','#fff','#1FBF8F','#E8643C'][Math.random()*4|0],s:Math.random()*2-1}));let f=0;
- (function a(){x.clearRect(0,0,c.width,c.height);P.forEach(p=>{p.y+=p.v;p.x+=p.s*2;x.fillStyle=p.c;x.fillRect(p.x,p.y,p.r,p.r*1.6)});if(++f<260)requestAnimationFrame(a);else x.clearRect(0,0,c.width,c.height)})()}
+setInterval(()=>fetch('/api/board/'+code).then(r=>r.json()).then(draw).catch(()=>{}),10000);
+function draw(d){if(!d||!d.title)return;document.title=d.title+' – مِضمار';$('t').textContent=d.title;$('tc').textContent=d.teacher?'المعلمة: '+d.teacher:'';
+ const url=location.origin+'/j/'+d.code;if($('qr').dataset.u!==url){$('qr').dataset.u=url;$('qr').src='/api/qr?text='+encodeURIComponent(url);$('url').textContent=url.replace(/^https?:\/\//,'');$('cd').textContent=d.code}
+ const live=d.phase!=='lobby';$('stage').classList.toggle('live',live);$('side').classList.toggle('off',!d.joinOpen);
+ $('lobby').hidden=live;$('ann').hidden=!(d.phase==='first'&&d.first);$('podium').hidden=!(d.phase==='done'&&!d.hidden);$('lanes').hidden=!(live&&!d.hidden&&d.rows.length);$('msg').hidden=!(live&&d.hidden);
+ $('n').textContent=d.names.length;$('closed').hidden=d.joinOpen;const box=$('names');
+ d.names.forEach(nm=>{if(!seen.has(nm)){seen.add(nm);const c=document.createElement('span');c.className='chip';c.textContent=nm;box.append(c)}});
+ [...box.children].forEach(c=>{if(!d.names.includes(c.textContent)){seen.delete(c.textContent);c.remove()}});
+ if(d.first){$('fn').textContent=d.first.name;$('ft').textContent=dur(d.first.duration);$('fsr').textContent=d.first.score+'/'+d.totalPoints;
+  if(firstKey!==d.first.id){firstKey=d.first.id;const a=$('ann');a.classList.remove('pop');void a.offsetWidth;a.classList.add('pop');confetti(70)}}else firstKey=null;
+ $('pg').textContent=`أنهت المسابقة: ${d.finished} · لا تزال تلعب: ${d.playing}`;
+ if(d.phase==='done'&&!d.hidden&&d.rows.length){const t=d.rows.slice(0,3);$('podium').innerHTML=[t[1],t[0],t[2]].filter(Boolean).map(r=>`<div class="pod p${Math.min(r.rank,3)}"><b>${r.rank===1?'🥇':r.rank===2?'🥈':'🥉'} ${esc(r.name)}${r.tie?' <span class=tg>تعادل</span>':''}</b><div class=sc>${r.score}</div><div>${dur(r.duration)}</div></div>`).join('');
+  const k=d.rows[0].id+':'+d.rows[0].score;if(doneKey!==k){doneKey=k;confetti(180)}}else if(d.phase!=='done')doneKey=null;
+ const L=$('lanes');if(!d.rows.length){return}const rowH=Math.max(48,innerHeight*.07),gap=8;L.style.height=d.rows.length*(rowH+gap)+'px';
+ d.rows.forEach((r,i)=>{let e=document.getElementById('r'+r.id);if(!e){e=document.createElement('div');e.id='r'+r.id;e.className='lane';e.style.transform=`translateY(${i*(rowH+gap)+50}px)`;e.style.opacity=0;L.append(e);requestAnimationFrame(()=>e.style.opacity=1)}
+  e.style.height=rowH+'px';e.classList.toggle('first',r.rank===1);
+  e.innerHTML=`<span class=rk>${r.rank}</span><span class=nm>${esc(r.name)}${r.tie?' <span class=tg>تعادل</span>':''}</span><span>${r.score}/${d.totalPoints}</span><span style="opacity:.75">${r.correct}✓</span><span style="min-width:3.5em;text-align:left">${dur(r.duration)}</span>`;
+  requestAnimationFrame(()=>e.style.transform=`translateY(${i*(rowH+gap)}px)`);prev[r.id]=r.rank});
+ [...L.children].forEach(e=>{if(!d.rows.some(r=>'r'+r.id===e.id))e.remove()})}
+function confetti(n){if(matchMedia('(prefers-reduced-motion:reduce)').matches)return;const c=$('cv'),x=c.getContext('2d');c.width=innerWidth;c.height=innerHeight;
+ const P=Array.from({length:n},()=>({x:Math.random()*c.width,y:-20-Math.random()*c.height*.4,v:3+Math.random()*5,r:4+Math.random()*6,c:['#F2B705','#fff','#1FBF8F','#E8643C'][Math.random()*4|0],s:Math.random()*2-1}));let f=0;
+ (function a(){x.clearRect(0,0,c.width,c.height);P.forEach(p=>{p.y+=p.v;p.x+=p.s*2;x.fillStyle=p.c;x.fillRect(p.x,p.y,p.r,p.r*1.6)});if(++f<240)requestAnimationFrame(a);else x.clearRect(0,0,c.width,c.height)})()}
 </script></body></html>

@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS questions(id INTEGER PRIMARY KEY,quiz_id INTEGER REFE
 CREATE TABLE IF NOT EXISTS groups(id INTEGER PRIMARY KEY,quiz_id INTEGER REFERENCES quizzes(id) ON DELETE CASCADE,name TEXT,token TEXT UNIQUE,seed INTEGER,started INTEGER,finished INTEGER,UNIQUE(quiz_id,name));
 CREATE TABLE IF NOT EXISTS answers(id INTEGER PRIMARY KEY,group_id INTEGER REFERENCES groups(id) ON DELETE CASCADE,question_id INTEGER,choice INTEGER,correct INTEGER,points INTEGER,at INTEGER,UNIQUE(group_id,question_id));
 `);
+if(!db.prepare("SELECT 1 FROM pragma_table_info('quizzes') WHERE name='session_open'").get())db.exec('ALTER TABLE quizzes ADD COLUMN session_open INTEGER DEFAULT 0;UPDATE quizzes SET session_open=1');
 const app=express(),server=http.createServer(app),io=new Server(server);
 app.set('trust proxy',1);app.use(helmet({contentSecurityPolicy:false}));app.use(express.json({limit:'6mb'}));
 const now=()=>Date.now(), wrap=f=>(q,s,n)=>Promise.resolve().then(()=>f(q,s,n)).catch(e=>{console.error(e);s.status(500).json({error:'خطأ في الخادم'})});
@@ -24,17 +25,16 @@ function auth(q,s,n){const r=db.prepare('SELECT teacher_id FROM sessions WHERE s
 const lim=rateLimit({windowMs:15*60e3,max:10,standardHeaders:true,message:{error:'محاولات كثيرة، حاولي بعد 15 دقيقة'}});
 const login=(s,id)=>{const sid=crypto.randomBytes(24).toString('hex');db.prepare('INSERT INTO sessions VALUES(?,?,?)').run(sid,id,now());
  s.setHeader('Set-Cookie',`sid=${sid}; HttpOnly; SameSite=Lax; Path=/; Max-Age=1209600${process.env.NODE_ENV==='production'?'; Secure':''}`)};
-app.get('/api/me',(q,s)=>{const r=db.prepare('SELECT t.username FROM sessions x JOIN teachers t ON t.id=x.teacher_id WHERE sid=?').get(cookie(q,'sid'));
- s.json({user:r?.username||null,needsSetup:!db.prepare('SELECT 1 FROM teachers').get()})});
-app.post('/api/setup',lim,(q,s)=>{if(db.prepare('SELECT 1 FROM teachers').get())return s.status(403).json({error:'تم الإعداد مسبقًا'});
- const {username,password}=q.body;if(!username||!password||password.length<6)return s.status(400).json({error:'كلمة المرور 6 أحرف على الأقل'});
- const id=db.prepare('INSERT INTO teachers(username,hash) VALUES(?,?)').run(username.trim(),bcrypt.hashSync(password,10)).lastInsertRowid;login(s,id);s.json({ok:1})});
-app.post('/api/login',lim,(q,s)=>{const t=db.prepare('SELECT * FROM teachers WHERE username=?').get(String(q.body.username||'').trim());
- if(!t||!bcrypt.compareSync(String(q.body.password||''),t.hash))return s.status(401).json({error:'بيانات الدخول غير صحيحة'});login(s,t.id);s.json({ok:1})});
+const TEACHER_CODE=String(process.env.TEACHER_CODE||'1234');
+const same=(a,b)=>{const x=Buffer.from(a),y=Buffer.from(b);return x.length===y.length&&crypto.timingSafeEqual(x,y)};
+app.get('/api/me',(q,s)=>{const r=db.prepare('SELECT t.username FROM sessions x JOIN teachers t ON t.id=x.teacher_id WHERE sid=?').get(cookie(q,'sid'));s.json({user:r?.username||null})});
+// الدخول باسم المعلمة + الرمز الموحد فقط؛ الاسم هو ما يميّز المعلمات
+app.post('/api/login',lim,(q,s)=>{const name=String(q.body.username||'').trim().replace(/\s+/g,' ').slice(0,40),code=String(q.body.code||'').trim();
+ if(name.length<2)return s.status(400).json({error:'اكتبي اسم المعلمة'});
+ if(!same(code,TEACHER_CODE))return s.status(401).json({error:'رمز الدخول غير صحيح'});
+ const t=db.prepare('SELECT * FROM teachers WHERE lower(username)=lower(?)').get(name);
+ const id=t?t.id:db.prepare('INSERT INTO teachers(username) VALUES(?)').run(name).lastInsertRowid;login(s,Number(id));s.json({ok:1,user:t?t.username:name})});
 app.post('/api/logout',(q,s)=>{db.prepare('DELETE FROM sessions WHERE sid=?').run(cookie(q,'sid'));s.setHeader('Set-Cookie','sid=; Max-Age=0; Path=/');s.json({ok:1})});
-app.post('/api/password',auth,(q,s)=>{const t=db.prepare('SELECT * FROM teachers WHERE id=?').get(q.tid);
- if(!bcrypt.compareSync(String(q.body.old||''),t.hash)||String(q.body.new||'').length<6)return s.status(400).json({error:'تحققي من كلمة المرور الحالية والجديدة (6 أحرف فأكثر)'});
- db.prepare('UPDATE teachers SET hash=? WHERE id=?').run(bcrypt.hashSync(q.body.new,10),q.tid);s.json({ok:1})});
 // ---- quizzes
 const newCode=()=>{for(;;){const c=String(crypto.randomInt(100000,999999));if(!db.prepare('SELECT 1 FROM quizzes WHERE code=?').get(c))return c}};
 const own=(q,s)=>{const r=db.prepare('SELECT * FROM quizzes WHERE id=? AND teacher_id=?').get(q.params.id,q.tid);if(!r)s.status(404).json({error:'غير موجود'});return r};
@@ -54,6 +54,12 @@ app.put('/api/quizzes/:id',auth,(q,s)=>{const z=own(q,s);if(!z)return;try{db.tra
 app.post('/api/quizzes/:id/copy',auth,(q,s)=>{const z=own(q,s);if(!z)return;const id=db.transaction(()=>{const r=db.prepare('INSERT INTO quizzes(title,description,image,time_limit,shuffle_q,shuffle_a,show_correct,allow_retry,teacher_id,code,created) VALUES(?,?,?,?,?,?,?,?,?,?,?)')
  .run(z.title+' (نسخة)',z.description,z.image,z.time_limit,z.shuffle_q,z.shuffle_a,z.show_correct,z.allow_retry,q.tid,newCode(),now()).lastInsertRowid;saveQuestions(r,qs(z.id));return r})();s.json({id})});
 app.post('/api/quizzes/:id/archive',auth,(q,s)=>{const z=own(q,s);if(!z)return;db.prepare('UPDATE quizzes SET archived=? WHERE id=?').run(z.archived?0:1,z.id);s.json({ok:1})});
+app.post('/api/quizzes/:id/start',auth,(q,s)=>{const z=own(q,s);if(!z)return;
+ if(z.archived)return s.status(400).json({error:'المسابقة مؤرشفة، ألغي الأرشفة أولًا'});
+ if(z.end_at&&now()>z.end_at)return s.status(400).json({error:'انتهى موعد إغلاق المسابقة، عدّلي الموعد أولًا'});
+ if(!db.prepare('SELECT 1 FROM questions WHERE quiz_id=?').get(z.id))return s.status(400).json({error:'أضيفي أسئلة أولًا'});
+ db.prepare("UPDATE quizzes SET session_open=1,board='shown',start_at=CASE WHEN start_at>? THEN NULL ELSE start_at END WHERE id=?").run(now(),z.id);push(z.id);s.json({code:z.code})});
+app.post('/api/quizzes/:id/session',auth,(q,s)=>{const z=own(q,s);if(!z)return;db.prepare('UPDATE quizzes SET session_open=? WHERE id=?').run(q.body.open?1:0,z.id);push(z.id);s.json({ok:1})});
 app.post('/api/quizzes/:id/board',auth,(q,s)=>{const z=own(q,s);if(!z)return;db.prepare('UPDATE quizzes SET board=? WHERE id=?').run(q.body.state==='hidden'?'hidden':'shown',z.id);push(z.id);s.json({ok:1})});
 app.delete('/api/quizzes/:id',auth,(q,s)=>{const z=own(q,s);if(!z)return;db.prepare('DELETE FROM quizzes WHERE id=?').run(z.id);s.json({ok:1})});
 app.delete('/api/groups/:gid',auth,(q,s)=>{const g=db.prepare('SELECT g.* FROM groups g JOIN quizzes z ON z.id=g.quiz_id WHERE g.id=? AND z.teacher_id=?').get(q.params.gid,q.tid);if(!g)return s.status(404).json({error:'غير موجود'});
@@ -61,13 +67,18 @@ app.delete('/api/groups/:gid',auth,(q,s)=>{const g=db.prepare('SELECT g.* FROM g
 // ---- ranking / stats
 function ranking(z){const total=db.prepare('SELECT COALESCE(SUM(points),0) t,COUNT(*) n FROM questions WHERE quiz_id=?').get(z.id);
  const rows=db.prepare(`SELECT g.id,g.name,g.started,g.finished,COUNT(a.id) answered,COALESCE(SUM(a.correct),0) correct,COALESCE(SUM(a.points),0) score,MAX(a.at) last FROM groups g LEFT JOIN answers a ON a.group_id=g.id WHERE g.quiz_id=? GROUP BY g.id`).all(z.id)
- .map(r=>({...r,done:r.finished?1:0,duration:Math.round(((r.finished||r.last||r.started)-r.started)/1000)}));
- rows.sort((a,b)=>b.score-a.score||a.duration-b.duration||a.id-b.id);
- rows.forEach((r,i)=>{const p=rows[i-1];r.rank=p&&p.score===r.score&&p.duration===r.duration?p.rank:i+1;r.tie=rows.some(o=>o!==r&&o.score===r.score&&o.duration===r.duration)});
+ .map(r=>{const ms=Math.max(0,(r.finished||r.last||r.started)-r.started);return {...r,done:r.finished?1:0,ms,duration:Math.round(ms/1000)}});
+ rows.sort((a,b)=>b.score-a.score||a.ms-b.ms||a.id-b.id);assign(rows);
  return {rows,totalPoints:total.t,nq:total.n}}
-function boardData(z){const r=ranking(z),hidden=z.board==='hidden';
- return {title:z.title,code:z.code,hidden,totalPoints:r.totalPoints,nq:r.nq,finished:r.rows.filter(x=>x.done).length,playing:r.rows.filter(x=>!x.done).length,
-  rows:hidden?[]:r.rows.map(({id,name,rank,tie,score,correct,duration,done,answered})=>({id,name,rank,tie,score,correct,duration,done,answered}))}}
+function assign(rows){rows.forEach((r,i)=>{const p=rows[i-1];r.rank=p&&p.score===r.score&&p.ms===r.ms?p.rank:i+1;r.tie=rows.some(o=>o!==r&&o.score===r.score&&o.ms===r.ms)})}
+function boardData(z){const r=ranking(z),hidden=z.board==='hidden',fin=r.rows.filter(x=>x.done),playing=r.rows.length-fin.length;
+ const phase=!fin.length?'lobby':playing>0?'first':'done';
+ const first=fin.length?[...fin].sort((a,b)=>a.finished-b.finished||a.id-b.id)[0]:null;
+ let list=phase==='done'?r.rows:phase==='first'?fin.map(x=>({...x})):[];if(phase==='first')assign(list);
+ const t=db.prepare('SELECT username FROM teachers WHERE id=?').get(z.teacher_id);
+ return {title:z.title,code:z.code,teacher:t?.username||'',hidden,joinOpen:status(z)==='open',phase,totalPoints:r.totalPoints,nq:r.nq,finished:fin.length,playing,names:r.rows.map(x=>x.name),
+  first:hidden||!first?null:{id:first.id,name:first.name,duration:first.duration,score:first.score},
+  rows:hidden?[]:list.map(({id,name,rank,tie,score,correct,duration,done,answered})=>({id,name,rank,tie,score,correct,duration,done,answered}))}}
 const push=id=>{const z=db.prepare('SELECT * FROM quizzes WHERE id=?').get(id);if(z)io.to('b'+z.code).emit('board',boardData(z))};
 io.on('connection',so=>{so.on('watch',code=>{const z=db.prepare('SELECT * FROM quizzes WHERE code=?').get(String(code));if(z){so.join('b'+z.code);so.emit('board',boardData(z))}})});
 app.get('/api/board/:code',(q,s)=>{const z=db.prepare('SELECT * FROM quizzes WHERE code=?').get(q.params.code);z?s.json(boardData(z)):s.status(404).json({error:'غير موجود'})});
@@ -76,7 +87,7 @@ app.get('/api/quizzes/:id/results',auth,(q,s)=>{const z=own(q,s);if(!z)return;co
  .map(x=>({...x,wrong:x.answered-x.correct,pct:x.answered?Math.round(100*x.correct/x.answered):null}));
  const ans=per.filter(x=>x.answered);const avg=r.rows.length?Math.round(10*r.rows.reduce((a,b)=>a+b.score,0)/r.rows.length)/10:0;
  const sorted=[...ans].sort((a,b)=>a.pct-b.pct);
- s.json({quiz:{id:z.id,title:z.title,code:z.code},...r,avg,questions:per,hardest:sorted[0]||null,easiest:sorted[sorted.length-1]||null,
+ s.json({quiz:{id:z.id,title:z.title,code:z.code,session_open:z.session_open},...r,avg,questions:per,hardest:sorted[0]||null,easiest:sorted[sorted.length-1]||null,
   mostMissed:ans.filter(x=>x.wrong>x.correct)})});
 app.get('/api/quizzes/:id/export.csv',auth,(q,s)=>{const z=own(q,s);if(!z)return;const r=ranking(z);const esc=v=>{v=String(v);if(/^[=+\-@]/.test(v))v="'"+v;return `"${v.replace(/"/g,'""')}"`};
  const lines=[['المركز','المجموعة','الدرجة','الإجابات الصحيحة','عدد الأسئلة المجاب عنها','مدة الإنجاز (ثانية)','الحالة'].map(esc).join(',')];
@@ -90,7 +101,7 @@ app.get('/api/qr',(q,s)=>{const t=String(q.query.text||'').slice(0,300);QR.toStr
 // ---- players
 function rng(seed){let a=seed>>>0;return()=>{a=(a+0x6D2B79F5)>>>0;let t=a;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296}}
 const shuffle=(arr,r)=>{const a=[...arr];for(let i=a.length-1;i>0;i--){const j=Math.floor(r()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
-const status=z=>z.archived?'مؤرشفة':z.start_at&&now()<z.start_at?'لم تبدأ بعد':z.end_at&&now()>z.end_at?'أُغلقت':'open';
+const status=z=>z.archived?'مؤرشفة':!z.session_open?'لم تبدأ بعد':z.start_at&&now()<z.start_at?'لم تبدأ بعد':z.end_at&&now()>z.end_at?'أُغلقت':'open';
 app.get('/api/join/:code',(q,s)=>{const z=db.prepare('SELECT * FROM quizzes WHERE code=?').get(q.params.code);if(!z)return s.status(404).json({error:'رمز غير صحيح'});
  s.json({title:z.title,description:z.description,image:z.image,time_limit:z.time_limit,nq:db.prepare('SELECT COUNT(*) n FROM questions WHERE quiz_id=?').get(z.id).n,status:status(z)})});
 app.post('/api/join/:code',rateLimit({windowMs:60e3,max:30}),(q,s)=>{const z=db.prepare('SELECT * FROM quizzes WHERE code=?').get(q.params.code);if(!z)return s.status(404).json({error:'رمز غير صحيح'});
@@ -101,9 +112,9 @@ app.post('/api/join/:code',rateLimit({windowMs:60e3,max:30}),(q,s)=>{const z=db.
 function ctx(token){const g=db.prepare('SELECT * FROM groups WHERE token=?').get(token);if(!g)return null;const z=db.prepare('SELECT * FROM quizzes WHERE id=?').get(g.quiz_id);
  let list=qs(z.id);if(z.shuffle_q)list=shuffle(list,rng(g.seed));return {g,z,list,answered:db.prepare('SELECT * FROM answers WHERE group_id=?').all(g.id)}}
 const deadline=(z,g)=>z.time_limit?g.started+z.time_limit*60000:null;
-function finish(g,at){if(!g.finished){db.prepare('UPDATE groups SET finished=? WHERE id=?').run(at,g.id);g.finished=at}}
+function finish(g,at){if(!g.finished){db.prepare('UPDATE groups SET finished=? WHERE id=? AND finished IS NULL').run(at,g.id);g.finished=at}}
 function state(c){const {g,z,list,answered}=c,dl=deadline(z,g),n=list.length,done=answered.length>=n||g.finished||(dl&&now()>dl);
- if(done&&!g.finished)finish(g,Math.min(now(),dl||now()));
+ if(done&&!g.finished)finish(g,answered.length>=n?Math.max(g.started,...answered.map(a=>a.at)):Math.min(now(),dl||now()));
  const sc=answered.reduce((a,b)=>a+b.points,0),tot=list.reduce((a,b)=>a+b.points,0),base={title:z.title,group:g.name,total:n,answered:answered.length,deadline:dl,now:now(),score:sc,totalPoints:tot,correct:answered.filter(a=>a.correct).length,retry:!!z.allow_retry};
  if(done){const rk=ranking(z).rows.find(r=>r.id===g.id);return {...base,done:true,duration:Math.round(((g.finished||now())-g.started)/1000),rank:z.board==='hidden'?null:rk?.rank}}
  const cur=list.find(x=>!answered.some(a=>a.question_id===x.id)),r=rng(g.seed+cur.id);let opts=cur.options.map((t,i)=>({i,t}));if(z.shuffle_a&&cur.type==='mc')opts=shuffle(opts,r);
@@ -118,6 +129,7 @@ app.post('/api/play/:token/answer',rateLimit({windowMs:10e3,max:40}),(q,s)=>{con
  const c2=ctx(q.params.token),ns=state(c2);push(c.z.id);s.json({correct:c.z.show_correct?!!ok:null,right:c.z.show_correct?cur.correct:null,state:ns})});
 app.post('/api/play/:token/retry',(q,s)=>{const c=ctx(q.params.token);if(!c||!c.z.allow_retry)return s.status(403).json({error:'غير مسموح'});if(status(c.z)!=='open')return s.status(403).json({error:'أُغلقت المسابقة'});
  db.prepare('DELETE FROM answers WHERE group_id=?').run(c.g.id);db.prepare('UPDATE groups SET started=?,finished=NULL,seed=? WHERE id=?').run(now(),crypto.randomInt(1,2**31),c.g.id);push(c.z.id);s.json({ok:1})});
+setInterval(()=>{for(const z of db.prepare('SELECT * FROM quizzes WHERE time_limit>0').all()){const n=db.prepare('UPDATE groups SET finished=started+?*60000 WHERE quiz_id=? AND finished IS NULL AND started+?*60000<?').run(z.time_limit,z.id,z.time_limit,now()).changes;if(n)push(z.id)}},5000).unref();
 // ---- static / pages
 const P=f=>(q,s)=>s.sendFile(path.join(__dirname,'public',f));
 app.get('/j/:code',P('play.html'));app.get('/board/:code',P('board.html'));app.use(express.static(path.join(__dirname,'public'),{index:'index.html'}));
