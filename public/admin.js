@@ -13,10 +13,18 @@ async function render(){me=me||await fetch('/api/me').then(r=>r.json());
  const M=$('#main');try{if(h==='/')await home(M);else if(h==='/quizzes')await list(M);else if(h==='/settings')settings(M);
   else if(m&&m[1]==='new')editor(M,null);else if(m&&m[2]==='results')await results(M,m[1]);else if(m)await editor(M,m[1]);else M.textContent='الصفحة غير موجودة'}catch(e){if(e.message!=='401')M.innerHTML='<p class=err>'+esc(e.message)+'</p>'}}
 addEventListener('hashchange',render);
-function authView(){app.innerHTML=`<div class=center><div class="card narrow"><h1>مِضمار</h1><p style="color:var(--mut)">تسجيل دخول المعلمة</p>
- <label>اسم المعلمة</label><input id=u autocomplete=name maxlength=80 placeholder="اكتبي اسم المعلمة"><label>رمز المعلمة</label><input id=p type=password inputmode=numeric maxlength=4 autocomplete=off placeholder="••••">
- <p class=err id=e></p><button class="btn p" id=go style="width:100%;justify-content:center">دخول</button></div></div>`;
- const go=async()=>{try{await api('/api/login','POST',{username:$('#u').value,code:$('#p').value});me=null;render()}catch(e){$('#e').textContent=e.message}};$('#go').onclick=go;$('#p').onkeydown=e=>e.key==='Enter'&&go();$('#u').onkeydown=e=>e.key==='Enter'&&$('#p').focus()}
+function authView(){
+ const err=new URLSearchParams(location.search).get('auth_error');
+ const msg=err==='cancelled'?'تم إلغاء تسجيل الدخول.':err==='oauth_failed'?'تعذر تسجيل الدخول. تحققي من إعدادات Google أو Microsoft ثم أعيدي المحاولة.':'';
+ app.innerHTML=`<div class=center><div class="card narrow"><h1>مِضمار</h1><p style="color:var(--mut)">تسجيل دخول المعلمة</p>
+ <p>اختاري حساب Google أو Microsoft للمتابعة.</p>
+ <p class=err id=e>${esc(msg)}</p>
+ <a class="btn p" href="/auth/google" style="width:100%;justify-content:center;margin:.35em 0">المتابعة باستخدام Google</a>
+ <a class="btn" href="/auth/microsoft" style="width:100%;justify-content:center;margin:.35em 0">المتابعة باستخدام Microsoft</a>
+ <small style="display:block;color:var(--mut);margin-top:1em">سيتم استخدام البريد الإلكتروني للتعرّف على حساب المعلمة.</small>
+ </div></div>`;
+ if(err)history.replaceState({},'',location.pathname+location.hash);
+}
 const dur=s=>s>=60?`${Math.floor(s/60)}د ${s%60}ث`:s+'ث';
 function chart(d){const W=Math.max(320,d.length*90),mx=Math.max(1,...d.map(x=>x.max));return `<div style="overflow-x:auto"><svg viewBox="0 0 ${W} 190" width="${W}" role=img aria-label="متوسط الدرجات لكل مسابقة">${d.map((x,i)=>{const h=Math.round(120*x.avg/mx),X=i*90+20;
  return `<rect x=${X} y=${140-h} width=50 height=${h} rx=6 fill="var(--g)"/><text x=${X+25} y=${134-h} text-anchor=middle fill="var(--ink)" font-size=13>${x.avg}/${x.max}</text><text x=${X+25} y=165 text-anchor=middle fill="var(--mut)" font-size=12>${esc(x.title.slice(0,10))}</text>`}).join('')}</svg></div>`}
@@ -38,8 +46,7 @@ async function list(M){const all=await api('/api/quizzes');const L=all.filter(z=
   if(b.dataset.a==='share')share(z)}}
 function share(z){const url=`${location.origin}/j/${z.code}`,d=document.createElement('dialog');d.innerHTML=`<h3>${esc(z.title)}</h3><img alt="QR" src="/api/qr?text=${encodeURIComponent(url)}" width=220 height=220 style="display:block;margin:auto;background:#fff"><p>رمز الدخول: <b style="font-size:1.4em">${z.code}</b></p><input readonly value="${url}" onfocus=this.select()><div class=row style="margin-top:.7em"><button class="btn p" id=cp>نسخ الرابط</button><button class=btn id=cl>إغلاق</button></div>`;
  document.body.append(d);d.showModal();$('#cp',d).onclick=()=>navigator.clipboard.writeText(url).then(()=>toast('تم النسخ'));$('#cl',d).onclick=()=>{d.close();d.remove()}}
-async function settings(M){M.innerHTML=`<h1>الإعدادات</h1><div class=card style="max-width:420px"><h2>تغيير كلمة المرور</h2><label>الحالية</label><input id=o type=password><label>الجديدة</label><input id=n type=password><p class=err id=e></p><button class="btn p" id=s>حفظ</button></div>`;
- $('#s').onclick=async()=>{try{await api('/api/password','POST',{old:$('#o').value,new:$('#n').value});toast('تم تغيير كلمة المرور');$('#o').value=$('#n').value='';$('#e').textContent=''}catch(e){$('#e').textContent=e.message}}}
+async function settings(M){const d=await api('/api/me');M.innerHTML=`<h1>الإعدادات</h1><div class=card style="max-width:520px"><h2>حساب المعلمة</h2><p><b>البريد الإلكتروني:</b> ${esc(d.email||'—')}</p><p><b>طريقة الدخول:</b> ${d.provider==='google'?'Google':d.provider==='microsoft'?'Microsoft':'—'}</p><p style="color:var(--mut)">يتم تسجيل الدخول عبر مزوّد الحساب، ولا تُخزّن كلمة مرور Google أو Microsoft في مِضمار.</p></div>`}
 const toMs=v=>v?new Date(v).getTime():null,fromMs=v=>v?new Date(v-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,16):'';
 const readImg=f=>new Promise((res,rej)=>{if(!f)return res('');if(f.size>1.5e6)return rej(Error('الصورة كبيرة (الحد 1.5 ميغابايت)'));const r=new FileReader();r.onload=()=>res(r.result);r.readAsDataURL(f)});
 async function editor(M,id){const z=id?await api('/api/quizzes/'+id):{title:'',description:'',image:'',time_limit:0,shuffle_q:0,shuffle_a:0,show_correct:1,allow_retry:0,start_at:null,end_at:null,questions:[],ng:0};
