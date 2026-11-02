@@ -25,12 +25,16 @@ const lim=rateLimit({windowMs:15*60e3,max:10,standardHeaders:true,message:{error
 const login=(s,id)=>{const sid=crypto.randomBytes(24).toString('hex');db.prepare('INSERT INTO sessions VALUES(?,?,?)').run(sid,id,now());
  s.setHeader('Set-Cookie',`sid=${sid}; HttpOnly; SameSite=Lax; Path=/; Max-Age=1209600${process.env.NODE_ENV==='production'?'; Secure':''}`)};
 app.get('/api/me',(q,s)=>{const r=db.prepare('SELECT t.username FROM sessions x JOIN teachers t ON t.id=x.teacher_id WHERE sid=?').get(cookie(q,'sid'));
- s.json({user:r?.username||null,needsSetup:!db.prepare('SELECT 1 FROM teachers').get()})});
+ s.json({user:r?.username||null,needsSetup:false})});
 app.post('/api/setup',lim,(q,s)=>{if(db.prepare('SELECT 1 FROM teachers').get())return s.status(403).json({error:'تم الإعداد مسبقًا'});
  const {username,password}=q.body;if(!username||!password||password.length<6)return s.status(400).json({error:'كلمة المرور 6 أحرف على الأقل'});
  const id=db.prepare('INSERT INTO teachers(username,hash) VALUES(?,?)').run(username.trim(),bcrypt.hashSync(password,10)).lastInsertRowid;login(s,id);s.json({ok:1})});
-app.post('/api/login',lim,(q,s)=>{const t=db.prepare('SELECT * FROM teachers WHERE username=?').get(String(q.body.username||'').trim());
- if(!t||!bcrypt.compareSync(String(q.body.password||''),t.hash))return s.status(401).json({error:'بيانات الدخول غير صحيحة'});login(s,t.id);s.json({ok:1})});
+app.post('/api/login',lim,(q,s)=>{const username=String(q.body.username||'').trim().slice(0,80),code=String(q.body.code||'');
+ if(!username)return s.status(400).json({error:'اكتبي اسم المعلمة'});
+ if(code!=='1234')return s.status(401).json({error:'رمز المعلمة غير صحيح'});
+ let t=db.prepare('SELECT * FROM teachers WHERE username=?').get(username);
+ if(!t){const id=db.prepare('INSERT INTO teachers(username,hash) VALUES(?,NULL)').run(username).lastInsertRowid;t={id,username}}
+ login(s,t.id);s.json({ok:1})});
 app.post('/api/logout',(q,s)=>{db.prepare('DELETE FROM sessions WHERE sid=?').run(cookie(q,'sid'));s.setHeader('Set-Cookie','sid=; Max-Age=0; Path=/');s.json({ok:1})});
 app.post('/api/password',auth,(q,s)=>{const t=db.prepare('SELECT * FROM teachers WHERE id=?').get(q.tid);
  if(!bcrypt.compareSync(String(q.body.old||''),t.hash)||String(q.body.new||'').length<6)return s.status(400).json({error:'تحققي من كلمة المرور الحالية والجديدة (6 أحرف فأكثر)'});
