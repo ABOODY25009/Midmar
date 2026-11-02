@@ -1,0 +1,34 @@
+<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>مِضمار</title><link rel="stylesheet" href="/style.css">
+<style>body{-webkit-user-select:none;user-select:none}.top{background:var(--g2);color:#fff;padding:.6em 1em}.top .bar{background:rgba(255,255,255,.25)}.top .bar i{background:var(--gold)}
+.choice{display:block;width:100%;text-align:right;font-size:1.15em;padding:.9em 1em;margin:.5em 0;border:2px solid var(--line);border-radius:14px;background:var(--card);cursor:pointer;min-height:56px}
+.choice.sel{border-color:var(--g);background:rgba(14,124,90,.12)}.choice.right{border-color:var(--ok);background:rgba(30,142,90,.2)}.choice.wrong{border-color:var(--red);background:rgba(194,58,58,.15)}
+.big{font-size:3em;font-weight:700;line-height:1.1}.fb{padding:.6em 1em;border-radius:10px;margin:.6em 0;font-weight:700}.fb.ok{background:rgba(30,142,90,.2)}.fb.no{background:rgba(194,58,58,.15)}</style></head><body><div id=app></div>
+<script>
+const code=location.pathname.split('/').pop(),KEY='mid_'+code,app=document.getElementById('app');let token=localStorage.getItem(KEY),S=null,sel=null,busy=false,timer=null,off=0;
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function api(u,m='GET',b){const r=await fetch(u,{method:m,headers:b?{'Content-Type':'application/json'}:{},body:b?JSON.stringify(b):undefined});const j=await r.json().catch(()=>({}));if(!r.ok){const e=Error(j.error||'حدث خطأ');e.data=j;throw e}return j}
+async function start(){if(token){try{S=await api('/api/play/'+token);off=S.now-Date.now();return game()}catch(e){localStorage.removeItem(KEY);token=null}}
+ try{const i=await api('/api/join/'+code);intro(i)}catch(e){app.innerHTML=`<div class=center><div class="card narrow"><h2>تعذّر فتح المسابقة</h2><p>${esc(e.message)}</p></div></div>`}}
+function intro(i){app.innerHTML=`<div class=center><div class="card narrow"><h1>${esc(i.title)}</h1>${i.image?`<img src="${i.image}" alt="" style="max-width:100%;border-radius:10px">`:''}<p>${esc(i.description)}</p>
+ <p class=tag>${i.nq} سؤال${i.time_limit?` · ${i.time_limit} دقيقة`:''}</p><p>جوال واحد لكل مجموعة. لا يمكن تغيير الإجابة بعد إرسالها.</p>
+ ${i.status==='open'?`<label for=n>اسم المجموعة</label><input id=n maxlength=40 autocomplete=off><p class=err id=e></p><button class="btn p" id=go style="width:100%;justify-content:center">ابدئي المسابقة</button>`:`<p class=err>المسابقة ${esc(i.status)}</p>`}</div></div>`;
+ const go=document.getElementById('go');if(go)go.onclick=async()=>{go.disabled=true;try{const r=await api('/api/join/'+code,'POST',{name:document.getElementById('n').value});token=r.token;localStorage.setItem(KEY,token);S=await api('/api/play/'+token);off=S.now-Date.now();game()}catch(e){document.getElementById('e').textContent=e.message;go.disabled=false}}}
+function game(){clearInterval(timer);if(S.done)return end();sel=null;busy=false;const q=S.question;
+ app.innerHTML=`<div class=top><div class=row><b>${esc(S.title)}</b><span class=sp></span><span id=tm></span></div><div class=row><small>${esc(S.group)}</small><span class=sp></span><small>سؤال ${S.answered+1} من ${S.total}</small></div><div class=bar style="margin-top:.4em"><i style="width:${100*S.answered/S.total}%"></i></div></div>
+ <div class=wrap style="max-width:640px"><h2 style="margin-top:.8em">${esc(q.text)}</h2>${q.image?`<img src="${q.image}" alt="" style="max-width:100%;border-radius:10px">`:''}<div id=ch>${q.options.map(o=>`<button class=choice data-i=${o.i}>${esc(o.t)}</button>`).join('')}</div><div id=fb></div>
+ <button class="btn p" id=ok disabled style="width:100%;justify-content:center;font-size:1.1em">تأكيد الإجابة</button></div>`;
+ document.getElementById('ch').onclick=e=>{const b=e.target.closest('.choice');if(!b||busy)return;sel=+b.dataset.i;document.querySelectorAll('.choice').forEach(x=>x.classList.toggle('sel',x===b));document.getElementById('ok').disabled=false};
+ document.getElementById('ok').onclick=submit;tick();if(S.deadline)timer=setInterval(tick,500)}
+function tick(){if(!S.deadline)return;const t=Math.max(0,Math.ceil((S.deadline-(Date.now()+off))/1000)),el=document.getElementById('tm');if(el)el.textContent=`${Math.floor(t/60)}:${String(t%60).padStart(2,'0')}`;
+ if(t<=0){clearInterval(timer);api('/api/play/'+token).then(s=>{S=s;if(s.done)end()})}}
+async function submit(){if(sel===null||busy)return;busy=true;const btn=document.getElementById('ok');btn.disabled=true;
+ try{const r=await api('/api/play/'+token+'/answer','POST',{question_id:S.question.id,choice:sel});S=r.state;
+  if(r.correct===null)return game();document.querySelectorAll('.choice').forEach(x=>{const i=+x.dataset.i;if(i===r.right)x.classList.add('right');else if(i===sel)x.classList.add('wrong')});
+  document.getElementById('fb').innerHTML=`<div class="fb ${r.correct?'ok':'no'}">${r.correct?'إجابة صحيحة!':'إجابة خاطئة'}</div>`;btn.textContent='السؤال التالي';btn.disabled=false;btn.onclick=game}
+ catch(e){if(e.data?.state){S=e.data.state;return game()}busy=false;btn.disabled=false;document.getElementById('fb').innerHTML=`<p class=err>${esc(e.message)}</p>`}}
+function end(){clearInterval(timer);const m=Math.floor(S.duration/60),s=S.duration%60;app.innerHTML=`<div class=center><div class="card narrow" style="text-align:center"><h1>انتهت المسابقة</h1><p>${esc(S.group)}</p><div class=big>${S.score}<small style="font-size:.4em;color:var(--mut)"> / ${S.totalPoints}</small></div>
+ <p>${S.correct} إجابة صحيحة من ${S.total} · الوقت ${m}د ${s}ث</p>${S.rank?`<p class=tag>مركزكم الحالي: ${S.rank}</p>`:''}<p>تابعي لوحة المتصدرات على شاشة الفصل.</p>${S.retry?'<button class="btn p" id=rt>إعادة المحاولة</button>':''}</div></div>`;
+ const r=document.getElementById('rt');if(r)r.onclick=async()=>{await api('/api/play/'+token+'/retry','POST');S=await api('/api/play/'+token);off=S.now-Date.now();game()}}
+start();
+</script></body></html>
