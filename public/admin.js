@@ -8,15 +8,15 @@ function confirmBox(msg){return new Promise(res=>{const d=document.createElement
 let me=null;
 async function render(){me=me||await fetch('/api/me').then(r=>r.json());
  if(!me.user)return authView();const h=location.hash.slice(1)||'/';const m=h.match(/^\/quiz\/(new|\d+)\/?(edit|results)?$/);
- app.innerHTML=`<nav class=nav><div class=wrap><b>مِضمار</b><a href="#/" data-p="/">الرئيسية</a><a href="#/quizzes" data-p="/quizzes">المسابقات</a><a href="#/quiz/new" data-p="/quiz/new">مسابقة جديدة</a><a href="#/settings" data-p="/settings">الإعدادات</a><span class=sp></span><a href="#" id=out>خروج</a></div></nav><main class=wrap id=main></main>`;
+ app.innerHTML=`<nav class=nav><div class=wrap><b>مِضمار</b><a href="#/" data-p="/">الرئيسية</a><a href="#/quizzes" data-p="/quizzes">المسابقات</a><a href="#/quiz/new" data-p="/quiz/new">مسابقة جديدة</a><a href="#/settings" data-p="/settings">الإعدادات</a><span class=sp></span><a href="#" id=out>خروج</a><span class="brand-mark" title="حقوق إنتريت" aria-label="حقوق إنتريت"><img src="/entrit-logo.svg" alt="إنتريت"></span></div></nav><main class=wrap id=main></main>`;
  document.querySelectorAll('.nav a[data-p]').forEach(a=>a.classList.toggle('on',a.dataset.p===h));$('#out').onclick=async e=>{e.preventDefault();await api('/api/logout','POST');me=null;render()};
  const M=$('#main');try{if(h==='/')await home(M);else if(h==='/quizzes')await list(M);else if(h==='/settings')settings(M);
   else if(m&&m[1]==='new')editor(M,null);else if(m&&m[2]==='results')await results(M,m[1]);else if(m)await editor(M,m[1]);else M.textContent='الصفحة غير موجودة'}catch(e){if(e.message!=='401')M.innerHTML='<p class=err>'+esc(e.message)+'</p>'}}
 addEventListener('hashchange',render);
-function authView(){const setup=me.needsSetup;app.innerHTML=`<div class=center><div class="card narrow"><h1>مِضمار</h1><p style="color:var(--mut)">${setup?'أنشئي حساب المعلمة لأول مرة':'تسجيل دخول المعلمة'}</p>
- <label>اسم المستخدم</label><input id=u autocomplete=username><label>كلمة المرور${setup?' (6 أحرف فأكثر)':''}</label><input id=p type=password autocomplete=${setup?'new-password':'current-password'}>
- <p class=err id=e></p><button class="btn p" id=go style="width:100%;justify-content:center">${setup?'إنشاء الحساب':'دخول'}</button></div></div>`;
- const go=async()=>{try{await api(setup?'/api/setup':'/api/login','POST',{username:$('#u').value,password:$('#p').value});me=null;render()}catch(e){$('#e').textContent=e.message}};$('#go').onclick=go;$('#p').onkeydown=e=>e.key==='Enter'&&go()}
+function authView(){app.innerHTML=`<div class=center><div class="card narrow"><h1>مِضمار</h1><p style="color:var(--mut)">تسجيل دخول المعلمة</p>
+ <label>اسم المعلمة</label><input id=u autocomplete=name maxlength=80 placeholder="اكتبي اسم المعلمة"><label>رمز المعلمة</label><input id=p type=password inputmode=numeric maxlength=4 autocomplete=off placeholder="••••">
+ <p class=err id=e></p><button class="btn p" id=go style="width:100%;justify-content:center">دخول</button></div></div>`;
+ const go=async()=>{try{await api('/api/login','POST',{username:$('#u').value,code:$('#p').value});me=null;render()}catch(e){$('#e').textContent=e.message}};$('#go').onclick=go;$('#p').onkeydown=e=>e.key==='Enter'&&go();$('#u').onkeydown=e=>e.key==='Enter'&&$('#p').focus()}
 const dur=s=>s>=60?`${Math.floor(s/60)}د ${s%60}ث`:s+'ث';
 function chart(d){const W=Math.max(320,d.length*90),mx=Math.max(1,...d.map(x=>x.max));return `<div style="overflow-x:auto"><svg viewBox="0 0 ${W} 190" width="${W}" role=img aria-label="متوسط الدرجات لكل مسابقة">${d.map((x,i)=>{const h=Math.round(120*x.avg/mx),X=i*90+20;
  return `<rect x=${X} y=${140-h} width=50 height=${h} rx=6 fill="var(--g)"/><text x=${X+25} y=${134-h} text-anchor=middle fill="var(--ink)" font-size=13>${x.avg}/${x.max}</text><text x=${X+25} y=165 text-anchor=middle fill="var(--mut)" font-size=12>${esc(x.title.slice(0,10))}</text>`}).join('')}</svg></div>`}
@@ -29,7 +29,7 @@ let tab='active';
 async function list(M){const all=await api('/api/quizzes');const L=all.filter(z=>tab==='active'?!z.archived:z.archived);
  M.innerHTML=`<div class=row><h1 class=sp>المسابقات</h1><button class="btn ${tab==='active'?'p':''}" data-t=active>النشطة</button><button class="btn ${tab==='arch'?'p':''}" data-t=arch>السابقة (المؤرشفة)</button></div>
  ${L.map(z=>`<div class=card style="margin:.7em 0"><div class=row><div class=sp><h3 style="margin:0">${esc(z.title)}</h3><small style="color:var(--mut)">${z.nq} سؤال · ${z.ng} مجموعة · الرمز ${z.code}</small></div>
- <a class="btn s" href="#/quiz/${z.id}/results">النتائج</a><a class="btn s" href="#/quiz/${z.id}/edit">تعديل</a><button class="btn s" data-a=share data-id=${z.id}>رابط ورمز QR</button><a class="btn s" target=_blank href="/board/${z.code}">لوحة المتصدرات</a>
+ <a class="btn p" target=_blank href="/board/${z.code}">ابدأ المسابقة</a><a class="btn s" href="#/quiz/${z.id}/results">النتائج</a><a class="btn s" href="#/quiz/${z.id}/edit">تعديل</a>
  <button class="btn s" data-a=copy data-id=${z.id}>نسخ</button><button class="btn s" data-a=arch data-id=${z.id}>${z.archived?'إلغاء الأرشفة':'أرشفة'}</button><button class="btn s d" data-a=del data-id=${z.id}>حذف</button></div></div>`).join('')||'<p>لا توجد مسابقات هنا.</p>'}`;
  M.onclick=async e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.t){tab=b.dataset.t;return list(M)}const id=b.dataset.id,z=all.find(x=>x.id==id);
   if(b.dataset.a==='copy'){await api(`/api/quizzes/${id}/copy`,'POST');toast('تم النسخ');list(M)}
@@ -66,12 +66,12 @@ async function editor(M,id){const z=id?await api('/api/quizzes/'+id):{title:'',d
   shuffle_q:$('#shuffle_q').checked,shuffle_a:$('#shuffle_a').checked,show_correct:$('#show_correct').checked,allow_retry:$('#allow_retry').checked,questions:Q};
   try{if(id)await api('/api/quizzes/'+id,'PUT',body);else{if(!Q.length)throw Error('أضيفي سؤالًا واحدًا على الأقل');await api('/api/quizzes','POST',body)}toast('تم الحفظ');location.hash='#/quizzes'}catch(x){$('#e').textContent=x.message}}}
 async function results(M,id){const r=await api(`/api/quizzes/${id}/results`),z=r.quiz;
- M.innerHTML=`<div class=row><h1 class=sp>نتائج: ${esc(z.title)}</h1><button class=btn id=sh>رابط ورمز QR</button><a class=btn target=_blank href="/board/${z.code}">فتح لوحة المتصدرات</a><a class="btn p" href="/api/quizzes/${id}/export.csv">تصدير CSV</a></div>
+ M.innerHTML=`<div class=row><h1 class=sp>نتائج: ${esc(z.title)}</h1><a class="btn p" target=_blank href="/board/${z.code}">ابدأ المسابقة</a><a class="btn p" href="/api/quizzes/${id}/export.csv">تصدير CSV</a></div>
  <div class=row><button class=btn id=hide>إخفاء النتائج عن الشاشة</button><button class=btn id=show>إظهار النتائج</button></div>
  <div class=grid style="margin:1em 0"><div class="card stat"><b>${r.rows.length}</b><span>مجموعة</span></div><div class="card stat"><b>${r.avg}/${r.totalPoints}</b><span>متوسط الدرجات</span></div>
  <div class="card stat"><b>${r.hardest?esc(r.hardest.text.slice(0,30)):'—'}</b><span>أصعب سؤال${r.hardest?` (${r.hardest.pct}% صحيح)`:''}</span></div><div class="card stat"><b>${r.easiest?esc(r.easiest.text.slice(0,30)):'—'}</b><span>أسهل سؤال${r.easiest?` (${r.easiest.pct}% صحيح)`:''}</span></div></div>
  <div class=card style="overflow-x:auto"><h2>ترتيب المجموعات</h2><table><tr><th>المركز<th>المجموعة<th>الدرجة<th>صحيحة<th>خاطئة<th>النسبة<th>الوقت<th>الحالة<th></tr>${r.rows.map(x=>`<tr><td>${x.rank}${x.tie?' <span class=tag>تعادل</span>':''}<td>${esc(x.name)}<td>${x.score}/${r.totalPoints}<td>${x.correct}<td>${x.answered-x.correct}<td>${x.answered?Math.round(100*x.correct/x.answered):0}%<td>${dur(x.duration)}<td>${x.done?'أنهت':'تلعب'}<td><button class="btn s d" data-g=${x.id}>حذف</button></tr>`).join('')||'<tr><td colspan=9>لا توجد مجموعات بعد</tr>'}</table></div>
  <div class=card style="margin-top:1em;overflow-x:auto"><h2>تحليل الأسئلة</h2><table><tr><th>السؤال<th>صحيحة<th>خاطئة<th>نسبة الصحة</tr>${r.questions.map(x=>`<tr><td>${esc(x.text.slice(0,60))}${r.mostMissed.some(m=>m.id===x.id)?' <span class=tag>أخطأت فيه معظم المجموعات</span>':''}<td>${x.correct}<td>${x.wrong}<td>${x.pct===null?'—':x.pct+'%'}</tr>`).join('')}</table></div>`;
- $('#sh').onclick=()=>share({...z});const st=s=>async()=>{await api(`/api/quizzes/${id}/board`,'POST',{state:s});toast(s==='hidden'?'أُخفيت النتائج':'أُظهرت النتائج')};$('#hide').onclick=st('hidden');$('#show').onclick=st('shown');
+ const st=s=>async()=>{await api(`/api/quizzes/${id}/board`,'POST',{state:s});toast(s==='hidden'?'أُخفيت النتائج':'أُظهرت النتائج')};$('#hide').onclick=st('hidden');$('#show').onclick=st('shown');
  M.onclick=async e=>{const b=e.target.closest('[data-g]');if(b&&await confirmBox('حذف هذه المجموعة ونتائجها؟')){await api('/api/groups/'+b.dataset.g,'DELETE');results(M,id)}}}
 render();
