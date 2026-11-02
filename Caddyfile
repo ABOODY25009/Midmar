@@ -1,0 +1,3 @@
+midmar.example.com {
+	reverse_proxy app:3000
+}

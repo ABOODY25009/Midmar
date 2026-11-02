@@ -1,0 +1,15 @@
+# للخادم الخاص (VPS): docker compose up -d --build
+# عدّلي midmar.example.com في Caddyfile إلى نطاقك قبل التشغيل
+services:
+  app:
+    build: .
+    restart: always
+    environment: {NODE_ENV: production, DB_PATH: /data/midmar.db}
+    volumes: [./data:/data]
+  caddy:
+    image: caddy:2
+    restart: always
+    ports: ["80:80", "443:443"]
+    volumes: [./Caddyfile:/etc/caddy/Caddyfile, caddy_data:/data]
+    depends_on: [app]
+volumes: {caddy_data: {}}
