@@ -70,7 +70,8 @@ function draw(d){
   return;
  }
  qr.classList.add('compact');
- const first=completed[0];
+ if(d.hidden){$('results').innerHTML='<div class="waiting"><h2>النتائج مخفية مؤقتًا</h2><p>رمز QR ما زال متاحًا لانضمام بقية الفرق.</p></div>';return;}
+ const first=[...completed].sort((a,b)=>(a.finishedAt||Number.MAX_SAFE_INTEGER)-(b.finishedAt||Number.MAX_SAFE_INTEGER))[0]||completed[0];
  const rows=completed.map((r,i)=>'<div class="rank-row '+(i===0?'top':'')+'"><span class="rank">'+(i===0?'🥇':i===1?'🥈':i===2?'🥉':(i+1))+'</span><span class="team">'+esc(r.name)+'</span><span class="score">'+r.score+'/'+d.totalPoints+'</span><span class="meta">'+duration(r.duration)+'</span></div>').join('');
  const activeHtml=active.length?'<details class="active"><summary>فرق لم تنه الإجابة بعد ('+active.length+')</summary><div class="active-list">'+active.map(r=>'<span>'+esc(r.name)+'</span>').join('')+'</div></details>':'';
  $('results').innerHTML='<div class="first"><small>اكتمل الفريق الأول</small><strong>'+esc(first.name)+'</strong><span class="time">الدرجة '+first.score+'/'+d.totalPoints+' · الزمن '+duration(first.duration)+'</span></div><h2>ترتيب الفرق المكتملة</h2><div class="rank-list">'+rows+'</div>'+activeHtml;
