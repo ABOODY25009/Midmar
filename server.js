@@ -98,9 +98,6 @@ app.get('/api/me',(q,s)=>{
  s.json({user:r?.username||null,email:r?.email||null,provider:r?.provider||null});
 });
 app.post('/api/logout',(q,s)=>{db.prepare('DELETE FROM sessions WHERE sid=?').run(cookie(q,'sid'));s.setHeader('Set-Cookie','sid=; Max-Age=0; Path=/');s.json({ok:1})});
-app.post('/api/password',auth,(q,s)=>{const t=db.prepare('SELECT * FROM teachers WHERE id=?').get(q.tid);
- if(!bcrypt.compareSync(String(q.body.old||''),t.hash)||String(q.body.new||'').length<6)return s.status(400).json({error:'تحققي من كلمة المرور الحالية والجديدة (6 أحرف فأكثر)'});
- db.prepare('UPDATE teachers SET hash=? WHERE id=?').run(bcrypt.hashSync(q.body.new,10),q.tid);s.json({ok:1})});
 // ---- quizzes
 const newCode=()=>{for(;;){const c=String(crypto.randomInt(100000,999999));if(!db.prepare('SELECT 1 FROM quizzes WHERE code=?').get(c))return c}};
 const own=(q,s)=>{const r=db.prepare('SELECT * FROM quizzes WHERE id=? AND teacher_id=?').get(q.params.id,q.tid);if(!r)s.status(404).json({error:'غير موجود'});return r};
