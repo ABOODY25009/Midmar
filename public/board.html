@@ -11,11 +11,11 @@ body{background:#09271f;color:#fff;min-height:100vh;overflow-x:hidden}
 .hd .spacer{flex:1}
 .hd .btn{background:#ffffff12;color:#fff;border-color:#ffffff35}
 .stats{display:flex;gap:1.5em;padding:.8em 2vw;color:#bfe3d5;font-size:clamp(.95rem,1.5vw,1.3rem);flex-wrap:wrap}
-.stage{padding:2vh 2vw 4vh;display:grid;grid-template-columns:minmax(240px,340px) minmax(0,1fr);gap:2vw;align-items:start}
+.stage{padding:2vh 2vw 4vh;display:grid;grid-template-columns:minmax(0,1fr);gap:2vw;align-items:start}.stage.has-completed{grid-template-columns:minmax(190px,260px) minmax(0,1fr)}
 .qr-card,.results-card{background:#ffffff0c;border:1px solid #ffffff20;border-radius:20px;padding:1.2em}
 .qr-card{text-align:center;position:sticky;top:1em}
-.qr-card img{display:block;width:min(100%,260px);aspect-ratio:1;object-fit:contain;background:#fff;border-radius:12px;padding:10px;margin:.8em auto}
-.qr-card .code{font-size:1.5em;font-weight:700;letter-spacing:.12em;color:#f2b705}
+.qr-card img{display:block;width:min(100%,340px);aspect-ratio:1;object-fit:contain;background:#fff;border-radius:12px;padding:10px;margin:.8em auto}
+.qr-card.compact img{width:min(100%,150px)}.qr-card.compact{padding:.8em}.qr-card .code{font-size:1.5em;font-weight:700;letter-spacing:.12em;color:#f2b705}
 .qr-card p{margin:.25em 0;color:#c6ddd5}
 .results-card{min-height:300px}
 .waiting{text-align:center;padding:6vh 1em}
@@ -38,7 +38,7 @@ body{background:#09271f;color:#fff;min-height:100vh;overflow-x:hidden}
 .active-list span{background:#ffffff12;border-radius:99px;padding:.2em .8em}
 .brand-mark{margin-inline-start:0;width:46px;height:46px;flex-basis:46px}
 canvas{position:fixed;inset:0;pointer-events:none;z-index:9}
-@media(max-width:760px){.stage{grid-template-columns:1fr}.qr-card{position:static;order:0}.results-card{order:1}.qr-card img{width:190px}}
+@media(max-width:760px){.stage,.stage.has-completed{grid-template-columns:1fr}.qr-card{position:static;order:0}.results-card{order:1}.qr-card img{width:190px}}
 </style></head>
 <body>
 <header class="hd"><h1 id="title">مِضمار – لوحة المسابقة</h1><span class="spacer"></span><button class="btn" id="fs">ملء الشاشة</button><span class="brand-mark" title="حقوق إنتريت" aria-label="حقوق إنتريت"><img src="/entrit-logo.svg" alt="إنتريت"></span></header>
@@ -63,13 +63,13 @@ function draw(d){
  $('playing').textContent='تلعب الآن: '+d.playing;
  const completed=(d.rows||[]).filter(r=>r.done).sort((a,b)=>b.score-a.score||a.duration-b.duration||a.id-b.id);
  const active=(d.rows||[]).filter(r=>!r.done);
- const qr=$('qr-card');
+ const qr=$('qr-card'),stage=document.querySelector('.stage');
  if(!completed.length){
-  qr.classList.remove('compact');
+  stage.classList.remove('has-completed');qr.classList.remove('compact');
   $('results').innerHTML='<div class="waiting"><h2>بانتظار الفرق</h2><p>رمز المسابقة ظاهر على الجانب. امسحوا QR للانضمام، وستظهر النتائج هنا فور إنهاء أول فريق.</p><p>الفرق المنضمة حتى الآن: <b>'+((d.rows||[]).length)+'</b></p></div>';
   return;
  }
- qr.classList.add('compact');
+ stage.classList.add('has-completed');qr.classList.add('compact');
  if(d.hidden){$('results').innerHTML='<div class="waiting"><h2>النتائج مخفية مؤقتًا</h2><p>رمز QR ما زال متاحًا لانضمام بقية الفرق.</p></div>';return;}
  const first=[...completed].sort((a,b)=>(a.finishedAt||Number.MAX_SAFE_INTEGER)-(b.finishedAt||Number.MAX_SAFE_INTEGER))[0]||completed[0];
  const rows=completed.map((r,i)=>'<div class="rank-row '+(i===0?'top':'')+'"><span class="rank">'+(i===0?'🥇':i===1?'🥈':i===2?'🥉':(i+1))+'</span><span class="team">'+esc(r.name)+'</span><span class="score">'+r.score+'/'+d.totalPoints+'</span><span class="meta">'+duration(r.duration)+'</span></div>').join('');
