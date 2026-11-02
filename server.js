@@ -71,7 +71,7 @@ function ranking(z){const total=db.prepare('SELECT COALESCE(SUM(points),0) t,COU
  return {rows,totalPoints:total.t,nq:total.n}}
 function boardData(z){const r=ranking(z),hidden=z.board==='hidden';
  return {title:z.title,code:z.code,hidden,totalPoints:r.totalPoints,nq:r.nq,finished:r.rows.filter(x=>x.done).length,playing:r.rows.filter(x=>!x.done).length,
-  rows:hidden?[]:r.rows.map(({id,name,rank,tie,score,correct,duration,done,answered})=>({id,name,rank,tie,score,correct,duration,done,answered}))}}
+  rows:hidden?[]:r.rows.map(({id,name,rank,tie,score,correct,duration,done,answered,finished})=>({id,name,rank,tie,score,correct,duration,done,answered,finishedAt:finished}))}}
 const push=id=>{const z=db.prepare('SELECT * FROM quizzes WHERE id=?').get(id);if(z)io.to('b'+z.code).emit('board',boardData(z))};
 io.on('connection',so=>{so.on('watch',code=>{const z=db.prepare('SELECT * FROM quizzes WHERE code=?').get(String(code));if(z){so.join('b'+z.code);so.emit('board',boardData(z))}})});
 app.get('/api/board/:code',(q,s)=>{const z=db.prepare('SELECT * FROM quizzes WHERE code=?').get(q.params.code);z?s.json(boardData(z)):s.status(404).json({error:'غير موجود'})});
