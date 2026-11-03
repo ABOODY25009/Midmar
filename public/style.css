@@ -29,8 +29,15 @@ dialog{border:1px solid var(--line);border-radius:var(--r);background:var(--card
 .bar{height:10px;border-radius:9px;background:var(--line);overflow:hidden}.bar i{display:block;height:100%;background:var(--g);transition:width .4s}
 @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 
-/* Entrit brand mark */
-.brand-mark{width:42px;height:42px;flex:0 0 42px;margin-inline-start:auto;border-radius:50%;overflow:hidden;display:grid;place-items:center;background:#fff;border:2px solid rgba(255,255,255,.8);box-shadow:0 2px 9px #0003;position:relative;cursor:help}
-.brand-mark img{width:100%;height:100%;object-fit:contain;padding:3px}
-.brand-mark::after{content:attr(title);position:absolute;top:calc(100% + 9px);left:50%;transform:translate(-50%,-4px);white-space:nowrap;background:#12263A;color:#fff;border:1px solid #ffffff35;border-radius:8px;padding:.35em .7em;font-size:12px;line-height:1.5;opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;z-index:20}
-.brand-mark:hover::after,.brand-mark:focus-visible::after{opacity:1;transform:translate(-50%,0)}
+/* Entrit ownership card */
+.brand-mark{width:40px;height:40px;flex:0 0 40px;margin-inline-start:auto;border:1px solid rgba(255,255,255,.65);border-radius:11px;display:grid;place-items:center;background:rgba(255,255,255,.13);color:#fff;font:700 22px/1 Arial,sans-serif;cursor:pointer;transition:background .18s,transform .18s}
+.brand-mark:hover{background:rgba(255,255,255,.24);transform:translateY(-1px)}
+.brand-dialog{width:min(92vw,390px);max-width:390px;padding:0;border:1px solid var(--line);border-radius:18px;background:var(--card);color:var(--ink);box-shadow:0 18px 55px #0003}
+.brand-dialog::backdrop{background:rgba(5,18,28,.58);backdrop-filter:blur(3px)}
+.brand-card{display:flex;align-items:center;gap:16px;padding:24px 22px}
+.brand-card img{width:84px;height:84px;flex:0 0 84px;object-fit:contain;border-radius:14px;background:var(--bg);padding:7px}
+.brand-copy{display:flex;flex-direction:column;gap:5px;min-width:0}
+.brand-copy strong{font-size:1.15em;color:var(--ink)}
+.brand-copy span{font-size:.88em;color:var(--mut);line-height:1.5}
+.brand-close{display:flex;margin:0 22px 20px auto;min-width:90px;justify-content:center}
+@media(max-width:520px){.brand-card{padding:20px 16px;gap:12px}.brand-card img{width:70px;height:70px;flex-basis:70px}}
