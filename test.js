@@ -68,7 +68,7 @@ const qs=[{type:'mc',text:'٢+٢؟',points:2,options:['3','4','5'],correct:1},{t
  const tl=await f('/api/quizzes','POST',{title:'وقت',time_limit:1,questions:qs},A);const tz=(await f('/api/quizzes/'+tl.j.id,'GET',0,A)).j;await f(`/api/quizzes/${tl.j.id}/start`,'POST',0,A);
  const tj=await f(`/api/join/${tz.code}`,'POST',{name:'ز'});db.prepare('UPDATE groups SET started=started-120000 WHERE token=?').run(tj.j.token);
  const se=io(B);const ev2=[];se.on('board',d=>ev2.push(d));await new Promise(r=>se.on('connect',r));se.emit('watch',tz.code);await wait(5800);
- ok('انتهاء الوقت يُنهي الفريق تلقائيًا ويحدّث الشاشة دون تدخل الطالبات',ev2.at(-1).finished===1&&ev2.at(-1).phase==='done');se.close();
+ ok('انتهاء الوقت يُنهي الفريق تلقائيًا ويحدّث الشاشة دون تدخل الطالبات',ev2.at(-1).finished===1&&ev2.at(-1).phase==='done'&&ev2.at(-1).first===null);se.close();
  ok('حذف مسابقة',(await f('/api/quizzes/'+cp.j.id,'DELETE',0,A)).s===200);
  so.close();proc.kill();await wait(500);await start();
  const A2=(await f('/api/login','POST',{username:'معلمة أ',code:'1234'})).ck;ok('البيانات باقية بعد إعادة التشغيل',(await f('/api/quizzes/'+id,'GET',0,A2)).j.questions.length===3&&(await f(`/api/board/${z.code}`)).j.rows.length===4);

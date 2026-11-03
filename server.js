@@ -72,8 +72,9 @@ function ranking(z){const total=db.prepare('SELECT COALESCE(SUM(points),0) t,COU
  return {rows,totalPoints:total.t,nq:total.n}}
 function assign(rows){rows.forEach((r,i)=>{const p=rows[i-1];r.rank=p&&p.score===r.score&&p.ms===r.ms?p.rank:i+1;r.tie=rows.some(o=>o!==r&&o.score===r.score&&o.ms===r.ms)})}
 function boardData(z){const r=ranking(z),hidden=z.board==='hidden',fin=r.rows.filter(x=>x.done),playing=r.rows.length-fin.length;
- const phase=!fin.length?'lobby':playing>0?'first':'done';
- const first=fin.length?[...fin].sort((a,b)=>a.finished-b.finished||a.id-b.id)[0]:null;
+ const comp=fin.filter(x=>r.nq>0&&x.answered>=r.nq);// «الفريق الأول» = من أجاب كل الأسئلة، لا من انتهى وقته فقط
+ const phase=fin.length&&!playing?'done':comp.length?'first':'lobby';
+ const first=comp.length?[...comp].sort((a,b)=>a.finished-b.finished||a.id-b.id)[0]:null;
  let list=phase==='done'?r.rows:phase==='first'?fin.map(x=>({...x})):[];if(phase==='first')assign(list);
  const t=db.prepare('SELECT username FROM teachers WHERE id=?').get(z.teacher_id);
  return {title:z.title,code:z.code,teacher:t?.username||'',hidden,joinOpen:status(z)==='open',phase,totalPoints:r.totalPoints,nq:r.nq,finished:fin.length,playing,names:r.rows.map(x=>x.name),

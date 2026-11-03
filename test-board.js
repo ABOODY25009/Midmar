@@ -1,0 +1,25 @@
+// اختبار شاشة العرض على DOM حقيقي (jsdom): مراحل الانتظار ← اكتمل الأول ← الترتيب الكامل
+const {JSDOM}=require('jsdom'),fs=require('fs');let n=0,bad=0;const ok=(t,c)=>{n++;if(!c)bad++;console.log((c?'✔ ':'✘ ')+t)};
+const html=fs.readFileSync(__dirname+'/public/board.html','utf8').replace(/<script src="\/socket.io[^>]*><\/script>/,'');
+const dom=new JSDOM(html,{url:'http://localhost/board/123456',runScripts:'dangerously',pretendToBeVisual:true,beforeParse(w){w.io=()=>({on(){},emit(){}});w.fetch=()=>Promise.reject();w.HTMLCanvasElement.prototype.getContext=()=>({clearRect(){},fillRect(){}});w.matchMedia=()=>({matches:true});w.requestAnimationFrame=f=>setTimeout(f,0)}});
+const w=dom.window,$=i=>w.document.getElementById(i);
+const base={title:'مسابقة',code:'123456',teacher:'أ. سارة',hidden:false,joinOpen:true,totalPoints:10,nq:5,finished:0,playing:0,names:[],first:null,rows:[],phase:'lobby'};
+w.draw({...base,names:['الصقور','النمور','الفهود'],playing:3});
+ok('الانتظار: QR كبير (بدون live) وأسماء الفرق ظاهرة',!$('stage').classList.contains('live')&&$('names').children.length===3&&$('n').textContent==='3'&&!$('lobby').hidden);
+ok('الانتظار: رمز QR والرابط معروضان',$('qr').src.includes('/api/qr?text=')&&$('url').textContent.includes('/j/123456'));
+ok('اسم المعلمة ظاهر',$('tc').textContent.includes('أ. سارة'));
+const r=(id,name,rank,score,d,done)=>({id,name,rank,tie:false,score,correct:score/2,duration:d,done,answered:5});
+w.draw({...base,phase:'first',finished:1,playing:2,names:['الصقور','النمور','الفهود'],first:{id:1,name:'الصقور',duration:135,score:10},rows:[r(1,'الصقور',1,10,135,1)]});
+ok('أول فريق: QR ينتقل للجانب (live) ولا يختفي',$('stage').classList.contains('live')&&!$('side').hidden&&$('qr').src.length>0);
+ok('أول فريق: رسالة «اكتمل الفريق الأول!» والاسم والزمن 02:15',!$('ann').hidden&&$('ann').textContent.includes('اكتمل الفريق الأول!')&&$('fn').textContent==='الصقور'&&$('ft').textContent==='02:15');
+ok('أول فريق: قائمة الانتظار مخفية والترتيب ظاهر',$('lobby').hidden&&!$('lanes').hidden&&$('podium').hidden);
+w.draw({...base,phase:'first',finished:2,playing:1,names:['الصقور','النمور','الفهود'],first:{id:1,name:'الصقور',duration:135,score:10},rows:[r(1,'الصقور',1,10,135,1),r(2,'النمور',2,10,162,1)]});
+ok('تحديث لحظي: صفّان مرتبان (التعادل في الدرجة يحسم بالزمن)',$('lanes').children.length===2&&$('r1').textContent.includes('02:15')&&$('r2').textContent.includes('02:42'));
+w.draw({...base,phase:'done',finished:3,playing:0,names:['الصقور','النمور','الفهود'],first:{id:1,name:'الصقور',duration:135,score:10},rows:[r(1,'الصقور',1,10,135,1),r(2,'النمور',2,10,162,1),r(3,'الفهود',3,9,190,1)]});
+ok('الانتهاء: منصة المراكز الثلاثة والترتيب الكامل',!$('podium').hidden&&$('podium').children.length===3&&$('ann').hidden&&$('lanes').children.length===3);
+ok('الانتهاء: الأول مميّز بصريًا والمراكز بالترتيب',$('r1').classList.contains('first')&&!$('r3').classList.contains('first'));
+w.draw({...base,phase:'done',hidden:true,finished:3,playing:0,names:['الصقور'],first:null,rows:[]});
+ok('إخفاء النتائج: لا ترتيب ولا منصة',$('podium').hidden&&$('lanes').hidden&&!$('msg').hidden);
+w.draw({...base,joinOpen:false,names:[]});
+ok('الانضمام مغلق: تنبيه ظاهر وQR باهت',!$('closed').hidden&&$('side').classList.contains('off'));
+console.log(`\n${n-bad}/${n} نجحت`);process.exit(bad?1:0);
