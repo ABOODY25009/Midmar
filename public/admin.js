@@ -1,30 +1,18 @@
 const $=(s,r=document)=>r.querySelector(s),app=$('#app');
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 async function api(u,m='GET',b){const r=await fetch(u,{method:m,headers:b?{'Content-Type':'application/json'}:{},body:b?JSON.stringify(b):undefined});
- const j=await r.json().catch(()=>({}));if(r.status===401&&u!=='/api/login'){me=null;render();throw Error('401')}if(!r.ok)throw Error(j.error||'حدث خطأ');return j}
+ const j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.error||'حدث خطأ');return j}
 function toast(t){const e=document.createElement('div');e.className='toast';e.textContent=t;document.body.append(e);setTimeout(()=>e.remove(),2500)}
 function confirmBox(msg){return new Promise(res=>{const d=document.createElement('dialog');d.innerHTML=`<p>${esc(msg)}</p><div class=row><button class="btn d" value=y>نعم، تأكيد</button><button class=btn value=n>إلغاء</button></div>`;
  document.body.append(d);d.showModal();d.onclick=e=>{if(e.target.value){d.close();d.remove();res(e.target.value==='y')}}})}
 let me=null;
 async function render(){me=me||await fetch('/api/me').then(r=>r.json());
- if(!me.user)return authView();const h=location.hash.slice(1)||'/';const m=h.match(/^\/quiz\/(new|\d+)\/?(edit|results)?$/);
- app.innerHTML=`<nav class=nav><div class=wrap><b>مِضمار</b><a href="#/" data-p="/">الرئيسية</a><a href="#/quizzes" data-p="/quizzes">المسابقات</a><a href="#/quiz/new" data-p="/quiz/new">مسابقة جديدة</a><a href="#/settings" data-p="/settings">الإعدادات</a><span class=sp></span><a href="#" id=out>خروج</a><span class="brand-mark" title="حقوق إنتريت" aria-label="حقوق إنتريت"><img src="/entrit-logo.svg" alt="إنتريت"></span></div></nav><main class=wrap id=main></main>`;
- document.querySelectorAll('.nav a[data-p]').forEach(a=>a.classList.toggle('on',a.dataset.p===h));$('#out').onclick=async e=>{e.preventDefault();await api('/api/logout','POST');me=null;render()};
+ const h=location.hash.slice(1)||'/';const m=h.match(/^\/quiz\/(new|\d+)\/?(edit|results)?$/);
+ app.innerHTML=`<nav class=nav><div class=wrap><b>مِضمار</b><a href="#/" data-p="/">الرئيسية</a><a href="#/quizzes" data-p="/quizzes">المسابقات</a><a href="#/quiz/new" data-p="/quiz/new">مسابقة جديدة</a><a href="#/settings" data-p="/settings">الإعدادات</a><span class=sp></span><span class="brand-mark" title="حقوق إنتريت" aria-label="حقوق إنتريت"><img src="/entrit-logo.svg" alt="إنتريت"></span></div></nav><main class=wrap id=main></main>`;
+ document.querySelectorAll('.nav a[data-p]').forEach(a=>a.classList.toggle('on',a.dataset.p===h));
  const M=$('#main');try{if(h==='/')await home(M);else if(h==='/quizzes')await list(M);else if(h==='/settings')settings(M);
   else if(m&&m[1]==='new')editor(M,null);else if(m&&m[2]==='results')await results(M,m[1]);else if(m)await editor(M,m[1]);else M.textContent='الصفحة غير موجودة'}catch(e){if(e.message!=='401')M.innerHTML='<p class=err>'+esc(e.message)+'</p>'}}
 addEventListener('hashchange',render);
-function authView(){
- const err=new URLSearchParams(location.search).get('auth_error');
- const msg=err==='cancelled'?'تم إلغاء تسجيل الدخول.':err==='oauth_failed'?'تعذر تسجيل الدخول. تحققي من إعدادات Google أو Microsoft ثم أعيدي المحاولة.':'';
- app.innerHTML=`<div class=center><div class="card narrow"><h1>مِضمار</h1><p style="color:var(--mut)">تسجيل دخول المعلمة</p>
- <p>اختاري حساب Google أو Microsoft للمتابعة.</p>
- <p class=err id=e>${esc(msg)}</p>
- <a class="btn p" href="/auth/google" style="width:100%;justify-content:center;margin:.35em 0">المتابعة باستخدام Google</a>
- <a class="btn" href="/auth/microsoft" style="width:100%;justify-content:center;margin:.35em 0">المتابعة باستخدام Microsoft</a>
- <small style="display:block;color:var(--mut);margin-top:1em">سيتم استخدام البريد الإلكتروني للتعرّف على حساب المعلمة.</small>
- </div></div>`;
- if(err)history.replaceState({},'',location.pathname+location.hash);
-}
 const dur=s=>s>=60?`${Math.floor(s/60)}د ${s%60}ث`:s+'ث';
 function chart(d){const W=Math.max(320,d.length*90),mx=Math.max(1,...d.map(x=>x.max));return `<div style="overflow-x:auto"><svg viewBox="0 0 ${W} 190" width="${W}" role=img aria-label="متوسط الدرجات لكل مسابقة">${d.map((x,i)=>{const h=Math.round(120*x.avg/mx),X=i*90+20;
  return `<rect x=${X} y=${140-h} width=50 height=${h} rx=6 fill="var(--g)"/><text x=${X+25} y=${134-h} text-anchor=middle fill="var(--ink)" font-size=13>${x.avg}/${x.max}</text><text x=${X+25} y=165 text-anchor=middle fill="var(--mut)" font-size=12>${esc(x.title.slice(0,10))}</text>`}).join('')}</svg></div>`}
