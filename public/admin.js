@@ -8,7 +8,7 @@ function confirmBox(msg){return new Promise(res=>{const d=document.createElement
 let me=null;
 async function render(){me=me||await fetch('/api/me').then(r=>r.json());
  const h=location.hash.slice(1)||'/';const m=h.match(/^\/quiz\/(new|\d+)\/?(edit|results)?$/);
- app.innerHTML=`<nav class=nav><div class=wrap><b>مِضمار</b><a href="#/" data-p="/">الرئيسية</a><a href="#/quizzes" data-p="/quizzes">المسابقات</a><a href="#/quiz/new" data-p="/quiz/new">مسابقة جديدة</a><a href="#/settings" data-p="/settings">الإعدادات</a><span class=sp></span><span class="brand-mark" title="حقوق إنتريت" aria-label="حقوق إنتريت"><img src="/entrit-logo.svg" alt="إنتريت"></span></div></nav><main class=wrap id=main></main>`;
+ app.innerHTML=`<nav class=nav><div class=wrap><b>مِضمار</b><a href="#/" data-p="/">الرئيسية</a><a href="#/quizzes" data-p="/quizzes">المسابقات</a><a href="#/quiz/new" data-p="/quiz/new">مسابقة جديدة</a><a href="#/settings" data-p="/settings">الإعدادات</a><span class=sp></span><span class="brand-mark" aria-label="حقوق إنتريت"><img src="/midmar-logo.png" alt="إنتريت"></span></div></nav><main class=wrap id=main></main>`;
  document.querySelectorAll('.nav a[data-p]').forEach(a=>a.classList.toggle('on',a.dataset.p===h));
  const M=$('#main');try{if(h==='/')await home(M);else if(h==='/quizzes')await list(M);else if(h==='/settings')settings(M);
   else if(m&&m[1]==='new')editor(M,null);else if(m&&m[2]==='results')await results(M,m[1]);else if(m)await editor(M,m[1]);else M.textContent='الصفحة غير موجودة'}catch(e){if(e.message!=='401')M.innerHTML='<p class=err>'+esc(e.message)+'</p>'}}
