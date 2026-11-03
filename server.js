@@ -21,83 +21,22 @@ const app=express(),server=http.createServer(app),io=new Server(server);
 app.set('trust proxy',1);app.use(helmet({contentSecurityPolicy:false}));app.use(express.json({limit:'6mb'}));
 const now=()=>Date.now(), wrap=f=>(q,s,n)=>Promise.resolve().then(()=>f(q,s,n)).catch(e=>{console.error(e);s.status(500).json({error:'خطأ في الخادم'})});
 const cookie=(q,k)=>((q.headers.cookie||'').split(/;\s*/).find(c=>c.startsWith(k+'='))||'').slice(k.length+1);
-function auth(q,s,n){const r=db.prepare('SELECT teacher_id FROM sessions WHERE sid=?').get(cookie(q,'sid'));if(!r)return s.status(401).json({error:'غير مصرح'});q.tid=r.teacher_id;n()}
+db.prepare("INSERT OR IGNORE INTO teachers(id,username,hash) VALUES(1,'المعلمة',NULL)").run();
+db.exec('UPDATE quizzes SET teacher_id=1');
+function auth(q,s,n){q.tid=1;n()}
 // ---- auth
 const lim=rateLimit({windowMs:15*60e3,max:10,standardHeaders:true,message:{error:'محاولات كثيرة، حاولي بعد 15 دقيقة'}});
 const login=(s,id)=>{const sid=crypto.randomBytes(24).toString('hex');db.prepare('INSERT INTO sessions VALUES(?,?,?)').run(sid,id,now());
  s.setHeader('Set-Cookie',`sid=${sid}; HttpOnly; SameSite=Lax; Path=/; Max-Age=1209600${process.env.NODE_ENV==='production'?'; Secure':''}`)};
-app.get('/api/me',(q,s)=>{const r=db.prepare('SELECT t.username FROM sessions x JOIN teachers t ON t.id=x.teacher_id WHERE sid=?').get(cookie(q,'sid'));
- s.json({user:r?.username||null,needsSetup:false})});
+app.get('/api/me',(q,s)=>s.json({user:'المعلمة',email:null,provider:null}));
 
 function addColumn(table,column,definition){try{db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`)}catch(e){if(!String(e.message).includes('duplicate column'))throw e}}
 addColumn('teachers','email','TEXT');
 addColumn('teachers','provider','TEXT');
 addColumn('teachers','provider_sub','TEXT');
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS teachers_oauth_identity ON teachers(provider,provider_sub) WHERE provider IS NOT NULL AND provider_sub IS NOT NULL');
-const appBase=()=>String(process.env.APP_BASE_URL||'').replace(/\/$/,'');
-function oauthConfig(provider){
- const google=provider==='google';
- const base=appBase();
- const clientId=google?process.env.GOOGLE_CLIENT_ID:process.env.MICROSOFT_CLIENT_ID;
- const clientSecret=google?process.env.GOOGLE_CLIENT_SECRET:process.env.MICROSOFT_CLIENT_SECRET;
- const redirect=google?(process.env.GOOGLE_REDIRECT_URI||base+'/auth/google/callback'):(process.env.MICROSOFT_REDIRECT_URI||base+'/auth/microsoft/callback');
- if(!base||!clientId||!clientSecret||!redirect) return null;
- return {clientId,clientSecret,redirect};
-}
-function oauthStart(provider){
- return (q,s)=>{
-  const cfg=oauthConfig(provider);
-  if(!cfg)return s.status(503).send('تسجيل الدخول غير مهيأ بعد. أضيفي مفاتيح OAuth في إعدادات الاستضافة.');
-  const state=crypto.randomBytes(32).toString('hex');
-  db.prepare('DELETE FROM oauth_states WHERE created<?').run(now()-10*60e3);
-  db.prepare('INSERT INTO oauth_states(state,provider,created) VALUES(?,?,?)').run(state,provider,now());
-  const google=provider==='google';
-  const authUrl=new URL(google?'https://accounts.google.com/o/oauth2/v2/auth':'https://login.microsoftonline.com/'+(process.env.MICROSOFT_TENANT||'common')+'/oauth2/v2.0/authorize');
-  authUrl.search=new URLSearchParams({
-   client_id:cfg.clientId,redirect_uri:cfg.redirect,response_type:'code',
-   scope:google?'openid email profile':'openid profile email User.Read',
-   state, ...(google?{access_type:'online',prompt:'select_account'}:{response_mode:'query',prompt:'select_account'})
-  }).toString();
-  s.redirect(authUrl.toString());
- };
-}
-async function oauthCallback(provider,q,s){
- const state=String(q.query.state||''),row=db.prepare('SELECT * FROM oauth_states WHERE state=? AND provider=?').get(state,provider);
- if(!row||now()-row.created>10*60e3){if(row)db.prepare('DELETE FROM oauth_states WHERE state=?').run(state);return s.status(400).send('تعذر التحقق من جلسة تسجيل الدخول. أعيدي المحاولة.')}
- db.prepare('DELETE FROM oauth_states WHERE state=?').run(state);
- if(q.query.error||!q.query.code)return s.redirect('/?auth_error=cancelled');
- const cfg=oauthConfig(provider);if(!cfg)return s.status(503).send('إعدادات تسجيل الدخول غير مكتملة.');
- try{
-  const google=provider==='google';
-  const tokenUrl=google?'https://oauth2.googleapis.com/token':'https://login.microsoftonline.com/'+(process.env.MICROSOFT_TENANT||'common')+'/oauth2/v2.0/token';
-  const tokenRes=await fetch(tokenUrl,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({client_id:cfg.clientId,client_secret:cfg.clientSecret,code:String(q.query.code),redirect_uri:cfg.redirect,grant_type:'authorization_code'})});
-  const token=await tokenRes.json();if(!tokenRes.ok||!token.access_token)throw Error('token_exchange');
-  const profileRes=await fetch(google?'https://openidconnect.googleapis.com/v1/userinfo':'https://graph.microsoft.com/v1.0/me?$select=id,displayName,mail,userPrincipalName',{headers:{Authorization:'Bearer '+token.access_token}});
-  const profile=await profileRes.json();if(!profileRes.ok)throw Error('profile_fetch');
-  const subject=String(google?profile.sub:profile.id||'');
-  const email=String(google?profile.email:profile.mail||profile.userPrincipalName||'').trim().toLowerCase();
-  const display=String(google?profile.name:profile.displayName||email).trim().slice(0,80);
-  if(!subject||!email||(google&&profile.email_verified!==true))throw Error('profile_incomplete');
-  let teacher=db.prepare('SELECT * FROM teachers WHERE provider=? AND provider_sub=?').get(provider,subject);
-  if(!teacher){
-   const username=(display||email).slice(0,60)+' · '+provider+' · '+subject.slice(0,6);
-   const id=db.prepare('INSERT INTO teachers(username,hash,email,provider,provider_sub) VALUES(?,NULL,?,?,?)').run(username,email,provider,subject).lastInsertRowid;
-   teacher={id,username,email,provider,provider_sub:subject};
-  }else{
-   db.prepare('UPDATE teachers SET email=? WHERE id=?').run(email,teacher.id);
-  }
-  login(s,teacher.id);s.redirect('/');
- }catch(e){console.error('OAuth callback failed:',e.message);s.redirect('/?auth_error=oauth_failed')}
-}
-app.get('/auth/google',oauthStart('google'));
-app.get('/auth/google/callback',(q,s)=>oauthCallback('google',q,s));
-app.get('/auth/microsoft',oauthStart('microsoft'));
-app.get('/auth/microsoft/callback',(q,s)=>oauthCallback('microsoft',q,s));
-app.get('/api/me',(q,s)=>{
- const r=db.prepare('SELECT t.username,t.email,t.provider FROM sessions x JOIN teachers t ON t.id=x.teacher_id WHERE sid=?').get(cookie(q,'sid'));
- s.json({user:r?.username||null,email:r?.email||null,provider:r?.provider||null});
-});
-app.post('/api/logout',(q,s)=>{db.prepare('DELETE FROM sessions WHERE sid=?').run(cookie(q,'sid'));s.setHeader('Set-Cookie','sid=; Max-Age=0; Path=/');s.json({ok:1})});
+// تسجيل الدخول معطّل: لوحة المعلمة متاحة مباشرة.
+app.post('/api/logout',(q,s)=>s.json({ok:1}));
 // ---- quizzes
 const newCode=()=>{for(;;){const c=String(crypto.randomInt(100000,999999));if(!db.prepare('SELECT 1 FROM quizzes WHERE code=?').get(c))return c}};
 const own=(q,s)=>{const r=db.prepare('SELECT * FROM quizzes WHERE id=? AND teacher_id=?').get(q.params.id,q.tid);if(!r)s.status(404).json({error:'غير موجود'});return r};
