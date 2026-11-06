@@ -25,7 +25,7 @@ body{background:#09271f;color:#fff;min-height:100vh;overflow-x:hidden}
 .first small{color:#f2b705;font-weight:700}
 .first strong{display:block;font-size:clamp(1.5rem,3vw,2.4rem);margin:.25em 0}
 .first .time{color:#c6ddd5}
-.rank-list{display:grid;gap:.6em}
+.rank-list{display:grid;gap:.6em}\n.progress-wrap{background:#ffffff0c;border:1px solid #ffffff20;border-radius:16px;padding:1em;margin-bottom:1em}.progress-table{border-collapse:collapse;width:100%;min-width:420px;text-align:center}.progress-table th,.progress-table td{padding:.65em;border-bottom:1px solid #ffffff20}.progress-table th:first-child{text-align:right;min-width:130px}.progress-table td{color:#f2b705;font-weight:800}.progress-table td:has(+td){ }
 .rank-row{display:flex;align-items:center;gap:.8em;background:#ffffff0c;border:1px solid #ffffff12;border-radius:12px;padding:.75em 1em;font-size:clamp(.95rem,1.5vw,1.25rem)}
 .rank-row.top{border-color:#f2b70580;background:#f2b70517}
 .rank{width:2em;font-weight:800;color:#f2b705}
@@ -56,6 +56,7 @@ $('qr').src='/api/qr?text='+encodeURIComponent(joinUrl);$('code').textContent=co
 $('fs').onclick=()=>document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen();
 const socket=io();socket.on('connect',()=>socket.emit('watch',code));socket.on('board',draw);
 let announced=null;
+function progressMatrix(d){if(!d.rows?.length)return '<div class="waiting"><p>لا يوجد مشاركون حتى الآن.</p></div>';const qs=d.questions||[];return `<div class="progress-wrap"><h2>متابعة تقدم المشاركين</h2><div style="overflow:auto"><table class="progress-table"><thead><tr><th>المشارك</th>${qs.map((q,i)=>`<th>س${i+1}</th>`).join('')}</tr></thead><tbody>${d.rows.map(r=>`<tr><th>${esc(r.name)}</th>${(r.progress||[]).map(p=>`<td title="${p.status==='done'?'مكتمل':'قيد العمل'}">${p.status==='done'?'✓':'●'}</td>`).join('')}</tr>`).join('')}</tbody></table></div><p class="meta">✓ مكتمل · ● لم يُنجز بعد</p></div>`}
 function draw(d){
  $('title').textContent='مِضمار – '+d.title;
  $('joined').textContent='الفرق المشاركة: '+(d.rows?.length||0);
@@ -66,15 +67,15 @@ function draw(d){
  const qr=$('qr-card'),stage=document.querySelector('.stage');
  if(!completed.length){
   stage.classList.remove('has-completed');qr.classList.remove('compact');
-  $('results').innerHTML='<div class="waiting"><h2>بانتظار الفرق</h2><p>رمز المسابقة ظاهر على الجانب. امسحوا QR للانضمام، وستظهر النتائج هنا فور إنهاء أول فريق.</p><p>الفرق المنضمة حتى الآن: <b>'+((d.rows||[]).length)+'</b></p></div>';
+  $('results').innerHTML=progressMatrix(d)+'<div class="waiting"><h2>بانتظار اكتمال المشاركين</h2><p>تظهر حالة الإجابة لكل مشارك مباشرة عند إرسالها.</p><p>المشاركون: <b>'+((d.rows||[]).length)+'</b></p></div>';
   return;
  }
  stage.classList.add('has-completed');qr.classList.add('compact');
- if(d.hidden){$('results').innerHTML='<div class="waiting"><h2>النتائج مخفية مؤقتًا</h2><p>رمز QR ما زال متاحًا لانضمام بقية الفرق.</p></div>';return;}
+ if(d.hidden){$('results').innerHTML=progressMatrix(d)+'<div class="waiting"><h2>الترتيب مخفي مؤقتًا</h2><p>متابعة تقدم المشاركين ما زالت ظاهرة.</p></div>';return;}
  const first=[...completed].sort((a,b)=>(a.finishedAt||Number.MAX_SAFE_INTEGER)-(b.finishedAt||Number.MAX_SAFE_INTEGER))[0]||completed[0];
  const rows=completed.map((r,i)=>'<div class="rank-row '+(i===0?'top':'')+'"><span class="rank">'+(i===0?'🥇':i===1?'🥈':i===2?'🥉':(i+1))+'</span><span class="team">'+esc(r.name)+'</span><span class="score">'+r.score+'/'+d.totalPoints+'</span><span class="meta">'+duration(r.duration)+'</span></div>').join('');
  const activeHtml=active.length?'<details class="active"><summary>فرق لم تنه الإجابة بعد ('+active.length+')</summary><div class="active-list">'+active.map(r=>'<span>'+esc(r.name)+'</span>').join('')+'</div></details>':'';
- $('results').innerHTML='<div class="first"><small>اكتمل الفريق الأول</small><strong>'+esc(first.name)+'</strong><span class="time">الدرجة '+first.score+'/'+d.totalPoints+' · الزمن '+duration(first.duration)+'</span></div><h2>ترتيب الفرق المكتملة</h2><div class="rank-list">'+rows+'</div>'+activeHtml;
+ $('results').innerHTML=progressMatrix(d)+'<div class="first"><small>اكتمل المشارك الأول</small><strong>'+esc(first.name)+'</strong><span class="time">الدرجة '+first.score+'/'+d.totalPoints+' · الزمن '+duration(first.duration)+'</span></div><h2>ترتيب الفرق المكتملة</h2><div class="rank-list">'+rows+'</div>'+activeHtml;
  const signature=first.id+':'+first.score+':'+first.duration;
  if(active.length===0&&announced!==signature){announced=signature;confetti()}
 }
