@@ -122,7 +122,7 @@ app.get('/api/quizzes/:id/results',auth,(q,s)=>{const z=own(q,s);if(!z)return;co
  .map(x=>({...x,wrong:x.answered-x.correct,pct:x.answered?Math.round(100*x.correct/x.answered):null}));
  const ans=per.filter(x=>x.answered);const avg=r.rows.length?Math.round(10*r.rows.reduce((a,b)=>a+b.score,0)/r.rows.length)/10:0;
  const sorted=[...ans].sort((a,b)=>a.pct-b.pct);
- s.json({quiz:{id:z.id,title:z.title,code:z.code},...r,avg,questions:per,hardest:sorted[0]||null,easiest:sorted[sorted.length-1]||null,
+ s.json({quiz:{id:z.id,title:z.title,code:z.code},progression_mode:z.progression_mode||'sequential',unlocked_question:z.unlocked_question||0,...r,avg,questions:per,hardest:sorted[0]||null,easiest:sorted[sorted.length-1]||null,
   mostMissed:ans.filter(x=>x.wrong>x.correct)})});
 app.get('/api/quizzes/:id/export.csv',auth,(q,s)=>{const z=own(q,s);if(!z)return;const r=ranking(z);const esc=v=>{v=String(v);if(/^[=+\-@]/.test(v))v="'"+v;return `"${v.replace(/"/g,'""')}"`};
  const lines=[['المركز','المجموعة','الدرجة','الإجابات الصحيحة','عدد الأسئلة المجاب عنها','مدة الإنجاز (ثانية)','الحالة'].map(esc).join(',')];
@@ -148,13 +148,14 @@ function ctx(token){const g=db.prepare('SELECT * FROM groups WHERE token=?').get
  let list=qs(z.id);if(z.shuffle_q)list=shuffle(list,rng(g.seed));return {g,z,list,answered:db.prepare('SELECT * FROM answers WHERE group_id=?').all(g.id)}}
 const deadline=(z,g)=>z.time_limit?g.started+z.time_limit*60000:null;
 function finish(g,at){if(!g.finished){db.prepare('UPDATE groups SET finished=? WHERE id=?').run(at,g.id);g.finished=at}}
-function state(c){const {g,z,list,answered}=c,dl=deadline(z,g),n=list.length,done=answered.length>=n||g.finished||(dl&&now()>dl);
+function state(c,requestedId){const {g,z,list,answered}=c,dl=deadline(z,g),n=list.length,done=answered.length>=n||g.finished||(dl&&now()>dl);
  if(done&&!g.finished)finish(g,Math.min(now(),dl||now()));
- const sc=answered.reduce((a,b)=>a+b.points,0),tot=list.reduce((a,b)=>a+b.points,0),base={title:z.title,group:g.name,total:n,answered:answered.length,deadline:dl,now:now(),score:sc,totalPoints:tot,correct:answered.filter(a=>a.correct).length,retry:!!z.allow_retry};
+ const sc=answered.reduce((a,b)=>a+b.points,0),tot=list.reduce((a,b)=>a+b.points,0),base={title:z.title,group:g.name,total:n,answered:answered.length,deadline:dl,now:now(),score:sc,totalPoints:tot,correct:answered.filter(a=>a.correct).length,retry:!!z.allow_retry,progression_mode:z.progression_mode||'sequential'};
  if(done){const rk=ranking(z).rows.find(r=>r.id===g.id);return {...base,done:true,duration:Math.round(((g.finished||now())-g.started)/1000),rank:z.board==='hidden'?null:rk?.rank}}
- const available=list.filter(x=>!answered.some(a=>a.question_id===x.id));let cur;if(z.progression_mode==='teacher'){const ix=Math.max(0,Math.min(list.length-1,z.unlocked_question||0));cur=list[ix]&&!answered.some(a=>a.question_id===list[ix].id)?list[ix]:available.find(x=>list.indexOf(x)<=ix)}else cur=available[0];if(!cur)return {...base,done:true};const r=rng(g.seed+cur.id);let opts=cur.options.map((t,i)=>({i,t}));if(z.shuffle_a&&cur.type==='mc')opts=shuffle(opts,r);
+ const available=list.filter(x=>!answered.some(a=>a.question_id===x.id));let cur;if(z.progression_mode==='teacher'){const ix=Math.max(0,Math.min(list.length-1,z.unlocked_question||0));cur=list[ix]&&!answered.some(a=>a.question_id===list[ix].id)?list[ix]:available.find(x=>list.indexOf(x)<=ix)}else cur=(z.progression_mode==='free'&&requestedId)?available.find(x=>x.id===+requestedId)||available[0]:available[0];if(!cur)return {...base,done:true};const r=rng(g.seed+cur.id);let opts=cur.options.map((t,i)=>({i,t}));if(z.shuffle_a&&cur.type==='mc')opts=shuffle(opts,r);
  return {...base,done:false,question:{id:cur.id,type:cur.type,text:cur.text,image:cur.image,points:cur.points,options:opts}}}
-app.get('/api/play/:token',(q,s)=>{const c=ctx(q.params.token);if(!c)return s.status(404).json({error:'جلسة غير صالحة'});s.json(state(c));push(c.z.id)});
+app.get('/api/play/:token',(q,s)=>{const c=ctx(q.params.token);if(!c)return s.status(404).json({error:'جلسة غير صالحة'});s.json(state(c,q.query.question_id));push(c.z.id)});
+app.get('/api/play/:token/questions',(q,s)=>{const c=ctx(q.params.token);if(!c)return s.status(404).json({error:'جلسة غير صالحة'});const done=new Set(c.answered.map(a=>a.question_id));s.json({mode:c.z.progression_mode||'sequential',questions:c.list.map((x,i)=>({id:x.id,index:i+1,text:x.text,answered:done.has(x.id),locked:c.z.progression_mode==='teacher'&&i>(c.z.unlocked_question||0)}))})});
 app.post('/api/quizzes/:id/unlock',auth,(q,s)=>{const z=own(q,s);if(!z)return;if(z.progression_mode!=='teacher')return s.status(400).json({error:'وضع التحكم بالمعلم غير مفعّل'});const total=db.prepare('SELECT COUNT(*) n FROM questions WHERE quiz_id=?').get(z.id).n;const n=Math.min(total-1,(z.unlocked_question||0)+1);db.prepare('UPDATE quizzes SET unlocked_question=? WHERE id=?').run(Math.max(0,n),z.id);push(z.id);s.json({unlocked_question:n})});
 app.post('/api/play/:token/answer',rateLimit({windowMs:10e3,max:40}),(q,s)=>{const c=ctx(q.params.token);if(!c)return s.status(404).json({error:'جلسة غير صالحة'});
  const st=state(c);if(st.done)return s.status(409).json({error:'انتهت المسابقة',state:st});
