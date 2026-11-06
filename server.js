@@ -60,16 +60,17 @@ app.get('/auth/google/callback',async(q,s)=>{
   const expiry=Number(info.exp||0),email=String(info.email||'').toLowerCase();
   if(!infoRes.ok||info.aud!==process.env.GOOGLE_CLIENT_ID||!['accounts.google.com','https://accounts.google.com'].includes(info.iss)||expiry*1000<=now()||info.nonce!==state||info.email_verified!=='true'||!info.sub||!email)throw Error('google_identity_invalid');
   let teacher=db.prepare("SELECT id FROM teachers WHERE provider='google' AND provider_sub=?").get(info.sub);
+  const ownerEmail=String(process.env.GOOGLE_OWNER_EMAIL||'').trim().toLowerCase();
+  const legacy=ownerEmail&&ownerEmail===email?db.prepare('SELECT id FROM teachers WHERE id=1 AND provider_sub IS NULL').get():null;
+  if(legacy&&teacher&&teacher.id!==legacy.id){
+   db.transaction(()=>{db.prepare('UPDATE quizzes SET teacher_id=? WHERE teacher_id=?').run(teacher.id,legacy.id);db.prepare('DELETE FROM teachers WHERE id=?').run(legacy.id)})();
+  }else if(legacy&&!teacher){
+   db.prepare("UPDATE teachers SET username=?,email=?,provider='google',provider_sub=? WHERE id=?").run('google:'+info.sub,email,info.sub,legacy.id);
+   teacher={id:legacy.id};
+  }
   if(!teacher){
-   const ownerEmail=String(process.env.GOOGLE_OWNER_EMAIL||'').trim().toLowerCase();
-   const legacy=ownerEmail&&ownerEmail===email?db.prepare('SELECT id FROM teachers WHERE id=1 AND provider_sub IS NULL').get():null;
-   if(legacy){
-    db.prepare("UPDATE teachers SET username=?,email=?,provider='google',provider_sub=? WHERE id=?").run('google:'+info.sub,email,info.sub,legacy.id);
-    teacher={id:legacy.id};
-   }else{
-    const created=db.prepare("INSERT INTO teachers(username,hash,email,provider,provider_sub) VALUES(?,NULL,?,'google',?)").run('google:'+info.sub,email,info.sub);
-    teacher={id:created.lastInsertRowid};
-   }
+   const created=db.prepare("INSERT INTO teachers(username,hash,email,provider,provider_sub) VALUES(?,NULL,?,'google',?)").run('google:'+info.sub,email,info.sub);
+   teacher={id:created.lastInsertRowid};
   }else db.prepare('UPDATE teachers SET email=? WHERE id=?').run(email,teacher.id);
   login(s,teacher.id);s.redirect('/');
  }catch(e){console.error('Google sign-in failed:',e.message);s.redirect('/?auth_error=google_failed')}
