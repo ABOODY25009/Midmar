@@ -21,22 +21,60 @@ const app=express(),server=http.createServer(app),io=new Server(server);
 app.set('trust proxy',1);app.use(helmet({contentSecurityPolicy:false}));app.use(express.json({limit:'6mb'}));
 const now=()=>Date.now(), wrap=f=>(q,s,n)=>Promise.resolve().then(()=>f(q,s,n)).catch(e=>{console.error(e);s.status(500).json({error:'خطأ في الخادم'})});
 const cookie=(q,k)=>((q.headers.cookie||'').split(/;\s*/).find(c=>c.startsWith(k+'='))||'').slice(k.length+1);
-db.prepare("INSERT OR IGNORE INTO teachers(id,username,hash) VALUES(1,'المعلمة',NULL)").run();
-db.exec('UPDATE quizzes SET teacher_id=1');
-function auth(q,s,n){q.tid=1;n()}
-// ---- auth
-const lim=rateLimit({windowMs:15*60e3,max:10,standardHeaders:true,message:{error:'محاولات كثيرة، حاولي بعد 15 دقيقة'}});
-const login=(s,id)=>{const sid=crypto.randomBytes(24).toString('hex');db.prepare('INSERT INTO sessions VALUES(?,?,?)').run(sid,id,now());
- s.setHeader('Set-Cookie',`sid=${sid}; HttpOnly; SameSite=Lax; Path=/; Max-Age=1209600${process.env.NODE_ENV==='production'?'; Secure':''}`)};
-app.get('/api/me',(q,s)=>s.json({user:'المعلمة',email:null,provider:null}));
 
-function addColumn(table,column,definition){try{db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`)}catch(e){if(!String(e.message).includes('duplicate column'))throw e}}
+db.prepare("INSERT OR IGNORE INTO teachers(id,username,hash) VALUES(1,'legacy-owner',NULL)").run();
+function addColumn(table,column,definition){try{db.exec('ALTER TABLE '+table+' ADD COLUMN '+column+' '+definition)}catch(e){if(!String(e.message).includes('duplicate column'))throw e}}
 addColumn('teachers','email','TEXT');
 addColumn('teachers','provider','TEXT');
 addColumn('teachers','provider_sub','TEXT');
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS teachers_oauth_identity ON teachers(provider,provider_sub) WHERE provider IS NOT NULL AND provider_sub IS NOT NULL');
-// تسجيل الدخول معطّل: لوحة المعلمة متاحة مباشرة.
-app.post('/api/logout',(q,s)=>s.json({ok:1}));
+db.exec('DELETE FROM oauth_states WHERE created < '+(now()-10*60e3));
+const APP_VERSION=require('./package.json').version;
+const APP_BASE_URL=(process.env.APP_BASE_URL||'').replace(/\/$/,'');
+const GOOGLE_REDIRECT_URI=process.env.GOOGLE_REDIRECT_URI||(APP_BASE_URL?APP_BASE_URL+'/auth/google/callback':'');
+const cookieOptions=()=> 'HttpOnly; SameSite=Lax; Path=/; Max-Age=1209600'+(process.env.NODE_ENV==='production'?'; Secure':'');
+const login=(s,id)=>{const sid=crypto.randomBytes(32).toString('hex');db.prepare('INSERT INTO sessions VALUES(?,?,?)').run(sid,id,now());s.setHeader('Set-Cookie','sid='+sid+'; '+cookieOptions())};
+function currentTeacher(q){const sid=cookie(q,'sid');if(!/^[a-f0-9]{64}$/.test(sid))return null;return db.prepare('SELECT t.id,t.username,t.email,t.provider FROM sessions x JOIN teachers t ON t.id=x.teacher_id WHERE x.sid=? AND x.created>?').get(sid,now()-14*24*60*60e3)||null}
+function auth(q,s,n){const t=currentTeacher(q);if(!t)return s.status(401).json({error:'يلزم تسجيل الدخول بحساب Google'});q.tid=t.id;q.teacher=t;n()}
+app.get('/api/version',(q,s)=>s.json({version:APP_VERSION}));
+app.get('/api/me',(q,s)=>{const t=currentTeacher(q);s.json(t?{authenticated:true,user:t.username,email:t.email,provider:t.provider}:{authenticated:false})});
+app.get('/auth/google',(q,s)=>{
+ if(!process.env.GOOGLE_CLIENT_ID||!process.env.GOOGLE_CLIENT_SECRET||!GOOGLE_REDIRECT_URI)return s.redirect('/?auth_error=not_configured');
+ const state=crypto.randomBytes(32).toString('hex');
+ db.prepare('INSERT INTO oauth_states(state,provider,created) VALUES(?,?,?)').run(state,'google',now());
+ const u=new URL('https://accounts.google.com/o/oauth2/v2/auth');
+ for(const [k,v] of Object.entries({client_id:process.env.GOOGLE_CLIENT_ID,redirect_uri:GOOGLE_REDIRECT_URI,response_type:'code',scope:'openid email profile',state,nonce:state,prompt:'select_account'}))u.searchParams.set(k,v);
+ s.redirect(u.toString());
+});
+app.get('/auth/google/callback',async(q,s)=>{
+ const state=String(q.query.state||''),code=String(q.query.code||'');
+ const saved=db.prepare("SELECT state FROM oauth_states WHERE state=? AND provider='google' AND created>?").get(state,now()-10*60e3);
+ if(!saved||!code){if(state)db.prepare('DELETE FROM oauth_states WHERE state=?').run(state);return s.redirect('/?auth_error=invalid_state')}
+ db.prepare('DELETE FROM oauth_states WHERE state=?').run(state);
+ try{
+  const tokenRes=await fetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({code,client_id:process.env.GOOGLE_CLIENT_ID,client_secret:process.env.GOOGLE_CLIENT_SECRET,redirect_uri:GOOGLE_REDIRECT_URI,grant_type:'authorization_code'})});
+  const tokens=await tokenRes.json();
+  if(!tokenRes.ok||!tokens.id_token)throw Error('google_token_exchange_failed');
+  const infoRes=await fetch('https://oauth2.googleapis.com/tokeninfo?id_token='+encodeURIComponent(tokens.id_token));
+  const info=await infoRes.json();
+  const expiry=Number(info.exp||0),email=String(info.email||'').toLowerCase();
+  if(!infoRes.ok||info.aud!==process.env.GOOGLE_CLIENT_ID||!['accounts.google.com','https://accounts.google.com'].includes(info.iss)||expiry*1000<=now()||info.nonce!==state||info.email_verified!=='true'||!info.sub||!email)throw Error('google_identity_invalid');
+  let teacher=db.prepare("SELECT id FROM teachers WHERE provider='google' AND provider_sub=?").get(info.sub);
+  if(!teacher){
+   const ownerEmail=String(process.env.GOOGLE_OWNER_EMAIL||'').trim().toLowerCase();
+   const legacy=ownerEmail&&ownerEmail===email?db.prepare('SELECT id FROM teachers WHERE id=1 AND provider_sub IS NULL').get():null;
+   if(legacy){
+    db.prepare("UPDATE teachers SET username=?,email=?,provider='google',provider_sub=? WHERE id=?").run('google:'+info.sub,email,info.sub,legacy.id);
+    teacher={id:legacy.id};
+   }else{
+    const created=db.prepare("INSERT INTO teachers(username,hash,email,provider,provider_sub) VALUES(?,NULL,?,'google',?)").run('google:'+info.sub,email,info.sub);
+    teacher={id:created.lastInsertRowid};
+   }
+  }else db.prepare('UPDATE teachers SET email=? WHERE id=?').run(email,teacher.id);
+  login(s,teacher.id);s.redirect('/');
+ }catch(e){console.error('Google sign-in failed:',e.message);s.redirect('/?auth_error=google_failed')}
+});
+app.post('/api/logout',(q,s)=>{const sid=cookie(q,'sid');if(sid)db.prepare('DELETE FROM sessions WHERE sid=?').run(sid);s.setHeader('Set-Cookie','sid=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0'+(process.env.NODE_ENV==='production'?'; Secure':''));s.json({ok:1})});
 // ---- quizzes
 const newCode=()=>{for(;;){const c=String(crypto.randomInt(100000,999999));if(!db.prepare('SELECT 1 FROM quizzes WHERE code=?').get(c))return c}};
 const own=(q,s)=>{const r=db.prepare('SELECT * FROM quizzes WHERE id=? AND teacher_id=?').get(q.params.id,q.tid);if(!r)s.status(404).json({error:'غير موجود'});return r};
