@@ -41,3 +41,11 @@ dialog{border:1px solid var(--line);border-radius:var(--r);background:var(--card
 .brand-copy span{font-size:.88em;color:var(--mut);line-height:1.5}
 .brand-close{display:flex;margin:0 22px 20px auto;min-width:90px;justify-content:center}
 @media(max-width:520px){.brand-card{padding:20px 16px;gap:12px}.brand-card img{width:70px;height:70px;flex-basis:70px}}
+
+.login-card{display:flex;flex-direction:column;gap:1em;text-align:center;padding:2em}
+.login-card p{color:var(--mut);margin:0}
+.login-card small{color:var(--mut)}
+.google-login{justify-content:center;gap:.8em;min-height:50px;font-weight:700}
+.google-login span{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:#fff;color:#4285f4;font:bold 16px Arial}
+.nav-logout{min-height:36px;padding:.25em .75em;background:transparent;color:#fff;border-color:#ffffff55}
+.brand-copy small{color:var(--mut);font-size:.82em;margin-top:3px}
