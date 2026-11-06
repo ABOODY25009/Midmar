@@ -56,7 +56,7 @@ $('qr').src='/api/qr?text='+encodeURIComponent(joinUrl);$('code').textContent=co
 $('fs').onclick=()=>document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen();
 const socket=io();socket.on('connect',()=>socket.emit('watch',code));socket.on('board',draw);
 let announced=null;
-function progressMatrix(d){if(!d.rows?.length)return '<div class="waiting"><p>لا يوجد مشاركون حتى الآن.</p></div>';const qs=d.questions||[];return `<div class="progress-wrap"><h2>متابعة تقدم المشاركين</h2><div style="overflow:auto"><table class="progress-table"><thead><tr><th>المشارك</th>${qs.map((q,i)=>`<th>س${i+1}</th>`).join('')}</tr></thead><tbody>${d.rows.map(r=>`<tr><th>${esc(r.name)}</th>${(r.progress||[]).map(p=>`<td title="${p.status==='done'?'مكتمل':'قيد العمل'}">${p.status==='done'?'✓':'●'}</td>`).join('')}</tr>`).join('')}</tbody></table></div><p class="meta">✓ مكتمل · ● لم يُنجز بعد</p></div>`}
+function progressMatrix(d){if(!d.rows?.length)return '<div class="waiting"><p>لا يوجد مشاركون حتى الآن.</p></div>';const qs=d.questions||[];return `<div class="progress-wrap"><h2>متابعة تقدم المشاركين</h2><div style="overflow:auto"><table class="progress-table"><thead><tr><th>المشارك</th>${qs.map((q,i)=>`<th>س${i+1}</th>`).join('')}</tr></thead><tbody>${d.rows.map(r=>`<tr><th>${esc(r.name)}</th>${(r.progress||[]).map(p=>`<td title="${p.status==='done'?'مكتمل':p.status==='active'?'قيد التنفيذ':'لم يبدأ'}">${p.status==='done'?'✓':p.status==='active'?'◉':'·'}</td>`).join('')}</tr>`).join('')}</tbody></table></div><p class="meta">✓ مكتمل · ◉ قيد التنفيذ · · لم يبدأ</p></div>`}
 function draw(d){
  $('title').textContent='مِضمار – '+d.title;
  $('joined').textContent='الفرق المشاركة: '+(d.rows?.length||0);
