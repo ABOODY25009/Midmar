@@ -57,8 +57,9 @@ app.get('/auth/google/callback',async(q,s)=>{
   if(!tokenRes.ok||!tokens.id_token)throw Error('google_token_exchange_failed');
   const infoRes=await fetch('https://oauth2.googleapis.com/tokeninfo?id_token='+encodeURIComponent(tokens.id_token));
   const info=await infoRes.json();
+  const claims=JSON.parse(Buffer.from(tokens.id_token.split('.')[1],'base64url').toString('utf8'));
   const expiry=Number(info.exp||0),email=String(info.email||'').toLowerCase();
-  if(!infoRes.ok||info.aud!==process.env.GOOGLE_CLIENT_ID||!['accounts.google.com','https://accounts.google.com'].includes(info.iss)||expiry*1000<=now()||info.nonce!==state||info.email_verified!=='true'||!info.sub||!email)throw Error('google_identity_invalid');
+  if(!infoRes.ok||info.aud!==process.env.GOOGLE_CLIENT_ID||!['accounts.google.com','https://accounts.google.com'].includes(info.iss)||expiry*1000<=now()||claims.nonce!==state||info.email_verified!=='true'&&info.email_verified!==true||!info.sub||info.sub!==claims.sub||!email)throw Error('google_identity_invalid');
   let teacher=db.prepare("SELECT id FROM teachers WHERE provider='google' AND provider_sub=?").get(info.sub);
   const ownerEmail=String(process.env.GOOGLE_OWNER_EMAIL||'').trim().toLowerCase();
   const legacy=ownerEmail&&ownerEmail===email?db.prepare('SELECT id FROM teachers WHERE id=1 AND provider_sub IS NULL').get():null;
