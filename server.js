@@ -145,7 +145,7 @@ app.post('/api/join/:code',rateLimit({windowMs:60e3,max:30}),(q,s)=>{const z=db.
  try{const token=crypto.randomBytes(16).toString('hex');db.transaction(()=>{db.prepare('INSERT INTO groups(quiz_id,name,token,seed,started) VALUES(?,?,?,?,?)').run(z.id,name,token,crypto.randomInt(1,2**31),now());if(rosterId)db.prepare('UPDATE quiz_roster SET claimed=1 WHERE id=? AND quiz_id=?').run(rosterId,z.id)})();push(z.id);s.json({token})}
  catch(e){s.status(409).json({error:'الاسم مستخدم في هذه المسابقة، اختاري اسمًا آخر'})}});
 function ctx(token){const g=db.prepare('SELECT * FROM groups WHERE token=?').get(token);if(!g)return null;const z=db.prepare('SELECT * FROM quizzes WHERE id=?').get(g.quiz_id);
- let list=qs(z.id);if(z.shuffle_q)list=shuffle(list,rng(g.seed));return {g,z,list,answered:db.prepare('SELECT * FROM answers WHERE group_id=?').all(g.id)}}
+ let list=qs(z.id);if(z.shuffle_q&&z.progression_mode!=='teacher')list=shuffle(list,rng(g.seed));return {g,z,list,answered:db.prepare('SELECT * FROM answers WHERE group_id=?').all(g.id)}}
 const deadline=(z,g)=>z.time_limit?g.started+z.time_limit*60000:null;
 function finish(g,at){if(!g.finished){db.prepare('UPDATE groups SET finished=? WHERE id=?').run(at,g.id);g.finished=at}}
 function state(c,requestedId){const {g,z,list,answered}=c,dl=deadline(z,g),n=list.length,done=answered.length>=n||g.finished||(dl&&now()>dl);
