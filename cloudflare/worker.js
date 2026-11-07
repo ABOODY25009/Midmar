@@ -201,7 +201,7 @@ export default {
      const ans=stats.filter(x=>x.answered),avg=r.rows.length?Math.round(10*r.rows.reduce((a,b)=>a+b.score,0)/r.rows.length)/10:0,sorted=[...ans].sort((a,b)=>a.pct-b.pct);
      return json({quiz:{id:z.id,title:z.title,code:z.code},progression_mode:z.progression_mode||"sequential",unlocked_question:z.unlocked_question||0,...r,avg,questions:stats,hardest:sorted[0]||null,easiest:sorted[sorted.length-1]||null,mostMissed:ans.filter(x=>x.wrong>x.correct)});
     }
-    if(action==="export\\.csv"&&method==="GET"){
+    if(action==="export.csv"&&method==="GET"){
      const r=await ranking(env,z),esc=v=>{v=String(v);if(/^[=+\\-@]/.test(v))v="'"+v;return '"'+v.replaceAll('"','""')+'"';};
      const lines=[["المركز","المجموعة","الدرجة","الإجابات الصحيحة","عدد الأسئلة المجاب عنها","مدة الإنجاز (ثانية)","الحالة"].map(esc).join(",")];
      r.rows.forEach(x=>lines.push([x.rank,x.name,x.score,x.correct,x.answered,x.duration,x.done?"أنهت":"لم تنه"].map(esc).join(",")));
