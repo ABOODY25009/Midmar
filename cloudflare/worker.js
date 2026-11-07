@@ -4,7 +4,7 @@ const APP_VERSION = "2.1.0";
 const json = (data,status=200,headers={}) => new Response(JSON.stringify(data),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store",...headers}});
 const text = (value,status=200,headers={}) => new Response(value,{status,headers});
 const now = () => Date.now();
-const cookie = (request,key) => { const raw=request.headers.get("cookie")||""; const p=raw.split(/;\\s*/).find(x=>x.startsWith(key+"=")); return p?p.slice(key.length+1):""; };
+const cookie = (request,key) => { const raw=request.headers.get("cookie")||""; const p=raw.split(/;\s*/).find(x=>x.startsWith(key+"=")); return p?p.slice(key.length+1):""; };
 const token = (bytes=32) => { const b=crypto.getRandomValues(new Uint8Array(bytes)); return Array.from(b,x=>x.toString(16).padStart(2,"0")).join(""); };
 const randomInt = max => { const b=new Uint32Array(1);crypto.getRandomValues(b);return b[0]%max; };
 const first = async (env,sql,...args) => env.DB.prepare(sql).bind(...args).first();
@@ -43,7 +43,7 @@ const saveQuestions = async (env,id,list) => {
  await batch(env,stmts);
 };
 const saveRoster = async (env,id,names) => {
- const list=String(names||"").split(/[\\n,،]+/).map(x=>x.trim().slice(0,40)).filter(Boolean),seen=new Set(),stmts=[stmt(env,"DELETE FROM quiz_roster WHERE quiz_id=? AND claimed=0",id)];
+ const list=String(names||"").split(/[\n,،]+/).map(x=>x.trim().slice(0,40)).filter(Boolean),seen=new Set(),stmts=[stmt(env,"DELETE FROM quiz_roster WHERE quiz_id=? AND claimed=0",id)];
  for(const name of list){const key=name.toLocaleLowerCase("ar");if(!seen.has(key)){seen.add(key);stmts.push(stmt(env,"INSERT OR IGNORE INTO quiz_roster(quiz_id,name) VALUES(?,?)",id,name));}}
  await batch(env,stmts);
 };
@@ -161,7 +161,7 @@ export default {
     return qs.length?json({questions:qs}):fail("لم يتم العثور على أسئلة واضحة",502);
    }
 
-   const quizPath=p.match(/^\/api\/quizzes\/(\d+)(?:\/(copy|archive|board|results|export\\.csv|unlock))?$/);
+   const quizPath=p.match(/^\/api\/quizzes\/(\d+)(?:\/(copy|archive|board|results|export\.csv|unlock))?$/);
    if(p==="/api/quizzes"&&method==="GET"){
     const u=await requireUser(request,env);if(!u)return fail("يلزم تسجيل الدخول بحساب Google",401);
     const rows=await all(env,"SELECT z.*,(SELECT COUNT(*) FROM questions WHERE quiz_id=z.id) nq,(SELECT COUNT(*) FROM groups WHERE quiz_id=z.id) ng FROM quizzes z WHERE teacher_id=? ORDER BY id DESC",u.id);return json(rows);
@@ -176,7 +176,8 @@ export default {
    if(quizPath){
     const id=Number(quizPath[1]),action=quizPath[2],u=await requireUser(request,env);if(!u)return fail("يلزم تسجيل الدخول بحساب Google",401);
     const z=await ownedQuiz(env,id,u.id);if(!z)return fail("غير موجود",404);
-    if(!action&&method==="GET")return json({...z,questions:await questionsFor(env,id),roster:(await all(env,"SELECT name FROM quiz_roster WHERE quiz_id=? ORDER BY name",id)).map(x=>x.name).join("\\n")});
+    if(!action&&method==="DELETE"){await run(env,"DELETE FROM quizzes WHERE id=?",id);return json({ok:1});}
+    if(!action&&method==="GET")return json({...z,questions:await questionsFor(env,id),roster:(await all(env,"SELECT name FROM quiz_roster WHERE quiz_id=? ORDER BY name",id)).map(x=>x.name).join("\n")});
     if(!action&&method==="PUT"){
      const b=await bodyOf(request);try{const f=quizFields(b);
       await run(env,"UPDATE quizzes SET title=?,description=?,image=?,time_limit=?,shuffle_q=?,shuffle_a=?,show_correct=?,allow_retry=?,start_at=?,end_at=?,participation_mode=?,entry_mode=?,progression_mode=? WHERE id=?",...f,id);
@@ -186,7 +187,7 @@ export default {
     }
     if(action==="copy"&&method==="POST"){
      const code=await newCode(env),ins=await run(env,"INSERT INTO quizzes(title,description,image,time_limit,shuffle_q,shuffle_a,show_correct,allow_retry,participation_mode,entry_mode,progression_mode,teacher_id,code,created) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",z.title+" (نسخة)",z.description,z.image,z.time_limit,z.shuffle_q,z.shuffle_a,z.show_correct,z.allow_retry,z.participation_mode||"groups",z.entry_mode||"both",z.progression_mode||"sequential",u.id,code,now());
-     const nid=ins.meta.last_row_id;await saveQuestions(env,nid,await questionsFor(env,id));await saveRoster(env,nid,(await all(env,"SELECT name FROM quiz_roster WHERE quiz_id=?",id)).map(x=>x.name).join("\\n"));return json({id:nid});
+     const nid=ins.meta.last_row_id;await saveQuestions(env,nid,await questionsFor(env,id));await saveRoster(env,nid,(await all(env,"SELECT name FROM quiz_roster WHERE quiz_id=?",id)).map(x=>x.name).join("\n"));return json({id:nid});
     }
     if(action==="archive"&&method==="POST"){await run(env,"UPDATE quizzes SET archived=? WHERE id=?",z.archived?0:1,id);return json({ok:1});}
     if(action==="board"&&method==="POST"){const b=await bodyOf(request);await run(env,"UPDATE quizzes SET board=? WHERE id=?",b.state==="hidden"?"hidden":"shown",id);return json({ok:1});}
@@ -202,10 +203,10 @@ export default {
      return json({quiz:{id:z.id,title:z.title,code:z.code},progression_mode:z.progression_mode||"sequential",unlocked_question:z.unlocked_question||0,...r,avg,questions:stats,hardest:sorted[0]||null,easiest:sorted[sorted.length-1]||null,mostMissed:ans.filter(x=>x.wrong>x.correct)});
     }
     if(action==="export.csv"&&method==="GET"){
-     const r=await ranking(env,z),esc=v=>{v=String(v);if(/^[=+\\-@]/.test(v))v="'"+v;return '"'+v.replaceAll('"','""')+'"';};
+     const r=await ranking(env,z),esc=v=>{v=String(v);if(/^[=+\-@]/.test(v))v="'"+v;return '"'+v.replaceAll('"','""')+'"';};
      const lines=[["المركز","المجموعة","الدرجة","الإجابات الصحيحة","عدد الأسئلة المجاب عنها","مدة الإنجاز (ثانية)","الحالة"].map(esc).join(",")];
      r.rows.forEach(x=>lines.push([x.rank,x.name,x.score,x.correct,x.answered,x.duration,x.done?"أنهت":"لم تنه"].map(esc).join(",")));
-     return text("\\ufeff"+lines.join("\\r\\n"),200,{"content-type":"text/csv; charset=utf-8","content-disposition":'attachment; filename="results-'+id+'.csv"'});
+     return text("\ufeff"+lines.join("\r\n"),200,{"content-type":"text/csv; charset=utf-8","content-disposition":'attachment; filename="results-'+id+'.csv"'});
     }
    }
    if(p==="/api/dashboard"&&method==="GET"){
