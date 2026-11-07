@@ -39,6 +39,26 @@ body{background:#09271f;color:#fff;min-height:100vh;overflow-x:hidden}
 .brand-mark{margin-inline-start:0;width:46px;height:46px;flex-basis:46px}
 canvas{position:fixed;inset:0;pointer-events:none;z-index:9}
 @media(max-width:760px){.stage,.stage.has-completed{grid-template-columns:1fr}.qr-card{position:static;order:0}.results-card{order:1}.qr-card img{width:190px}}
+</style>
+<style>
+.hd{position:sticky;top:0;z-index:5;background:linear-gradient(110deg,#06251e,#0b4735);box-shadow:0 8px 26px #0003;padding:1em 2.2vw}
+.hd h1{font-weight:800;letter-spacing:-.035em}
+.stats{gap:.65em;padding:1em 2vw}
+.stats span{background:#ffffff0b;border:1px solid #ffffff18;border-radius:99px;padding:.35em .85em}
+.stage{max-width:1680px;margin:0 auto;padding:1.2em 2vw 3em}
+.qr-card,.results-card{background:linear-gradient(145deg,#ffffff12,#ffffff08);border-color:#ffffff24;box-shadow:0 14px 35px #0002;border-radius:22px}
+.qr-card h2{font-size:1.2em}
+.qr-card img{box-shadow:0 8px 26px #0003}
+.results-card{min-height:360px}
+.progress-wrap{background:#ffffff0a;border-color:#ffffff22;border-radius:18px}
+.progress-table th,.progress-table td{padding:.72em}
+.rank-row{border-radius:15px;padding:.9em 1.1em;background:#ffffff0d}
+.rank-row.top{border-color:#e7bc3c;background:linear-gradient(110deg,#e4b32c25,#ffffff09)}
+.first{border-radius:19px;border-color:#e7bc3c88}
+.waiting{padding:7vh 1.2em}
+.brand-mark{border:1px solid #ffffff4a;border-radius:13px;background:#ffffff12;overflow:hidden}
+.brand-mark img{width:30px;height:30px}
+@media(max-width:760px){.hd{padding:.8em 1em}.stats{padding:.7em 1em}.stage{padding:1em}.results-card,.qr-card{border-radius:17px}}
 </style></head>
 <body>
 <header class="hd"><h1 id="title">مِضمار – لوحة المسابقة</h1><span class="spacer"></span><button class="btn" id="fs">ملء الشاشة</button><span class="brand-mark" title="حقوق إنتريت" aria-label="حقوق إنتريت"><img src="/entrit-logo.svg" alt="إنتريت"></span></header>
