@@ -6,6 +6,22 @@ function toast(t){const e=document.createElement('div');e.className='toast';e.te
 function confirmBox(msg){return new Promise(res=>{const d=document.createElement('dialog');d.innerHTML=`<p>${esc(msg)}</p><div class=row><button class="btn d" value=y>نعم، تأكيد</button><button class=btn value=n>إلغاء</button></div>`;
  document.body.append(d);d.showModal();d.onclick=e=>{if(e.target.value){d.close();d.remove();res(e.target.value==='y')}}})}
 let me=null;
+
+const THEME_KEY='midmar-theme';
+const storedTheme=()=>localStorage.getItem(THEME_KEY);
+let currentTheme=storedTheme()|| (matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+function applyTheme(theme,save=true){
+ currentTheme=theme==='dark'?'dark':'light';
+ document.documentElement.dataset.theme=currentTheme;
+ if(save)localStorage.setItem(THEME_KEY,currentTheme);
+ const btn=$('#themeToggle');
+ if(btn){btn.innerHTML=currentTheme==='dark'?'<span aria-hidden="true">☀</span><span>الوضع الساطع</span>':'<span aria-hidden="true">☾</span><span>الوضع المظلم</span>';btn.setAttribute('aria-label',currentTheme==='dark'?'التبديل إلى الوضع الساطع':'التبديل إلى الوضع المظلم');btn.title=btn.getAttribute('aria-label')}
+ document.querySelectorAll('[data-theme-choice]').forEach(x=>x.classList.toggle('p',x.dataset.themeChoice===currentTheme));
+ const status=$('#themeModeStatus');if(status)status.textContent=currentTheme==='dark'?'الوضع المظلم مفعّل':'الوضع الساطع مفعّل';
+}
+function toggleTheme(){applyTheme(currentTheme==='dark'?'light':'dark')}
+applyTheme(currentTheme,false);
+
 async function loginScreen(){
  const error=new URLSearchParams(location.search).get('auth_error');
  const message=error==='not_configured'?'تسجيل Google غير مهيأ في إعدادات الخادم.':error?'تعذر تسجيل الدخول عبر Google. حاول مرة أخرى.':'';
@@ -43,7 +59,9 @@ async function render(){
  me=await fetch('/api/me').then(r=>r.json()).catch(()=>({authenticated:false}));
  if(!me.authenticated){await loginScreen();return}
  const h=location.hash.slice(1)||'/';const m=h.match(/^\/quiz\/(new|\d+)\/?(edit|results)?$/);
- app.innerHTML=`<nav class=nav><div class=wrap><div class=nav-brand><span class=nav-emblem>م</span><div><strong>مِضمار</strong><small>منصة المسابقات التفاعلية</small></div></div><a href="#/" data-p="/">الرئيسية</a><a href="#/quizzes" data-p="/quizzes">المسابقات</a><a href="#/settings" data-p="/settings">الإعدادات</a><a class=nav-create href="#/quiz/new" data-p="/quiz/new">+ إنشاء مسابقة</a><div class=nav-account><span class=nav-avatar>م</span><small>${esc(me.email||"حساب المعلم")}</small></div><span class=sp></span><button class="btn nav-logout" id="logoutBtn" type="button">تسجيل الخروج</button><button class="brand-mark" id="brandOpen" type="button" aria-label="عرض بطاقة التطوير" aria-haspopup="dialog" aria-controls="brandDialog"><span aria-hidden="true">©</span></button><dialog class="brand-dialog" id="brandDialog" aria-labelledby="brandTitle"><div class="brand-card"><img src="/midmar-logo.png" alt="شعار أنتريت"><div class="brand-copy"><strong id="brandTitle">تطوير أنتريت</strong><span>تم تطوير مِضمار بواسطة أنتريت</span><small id="brandVersion">إصدار الموقع 1.0.0</small></div></div><button class="btn brand-close" id="brandClose" type="button">إغلاق</button></dialog></div></nav><main class=wrap id=main></main>`;
+ app.innerHTML=`<nav class=nav><div class=wrap><div class=nav-brand><span class=nav-emblem>م</span><div><strong>مِضمار</strong><small>منصة المسابقات التفاعلية</small></div></div><a href="#/" data-p="/">الرئيسية</a><a href="#/quizzes" data-p="/quizzes">المسابقات</a><a href="#/settings" data-p="/settings">الإعدادات</a><a class=nav-create href="#/quiz/new" data-p="/quiz/new">+ إنشاء مسابقة</a><div class=nav-account><span class=nav-avatar>م</span><small>${esc(me.email||"حساب المعلم")}</small></div><span class=sp></span><button class="btn theme-toggle" id="themeToggle" type="button"></button><button class="btn nav-logout" id="logoutBtn" type="button">تسجيل الخروج</button><button class="brand-mark" id="brandOpen" type="button" aria-label="عرض بطاقة التطوير" aria-haspopup="dialog" aria-controls="brandDialog"><span aria-hidden="true">©</span></button><dialog class="brand-dialog" id="brandDialog" aria-labelledby="brandTitle"><div class="brand-card"><img src="/midmar-logo.png" alt="شعار أنتريت"><div class="brand-copy"><strong id="brandTitle">تطوير أنتريت</strong><span>تم تطوير مِضمار بواسطة أنتريت</span><small id="brandVersion">إصدار الموقع 1.0.0</small></div></div><button class="btn brand-close" id="brandClose" type="button">إغلاق</button></dialog></div></nav><main class=wrap id=main></main>`;
+ applyTheme(currentTheme,false);
+ $('#themeToggle').onclick=toggleTheme;
  fetch('/api/version').then(r=>r.json()).then(v=>{const el=$('#brandVersion');if(el)el.textContent='إصدار الموقع '+v.version}).catch(()=>{});
  $('#logoutBtn').onclick=async()=>{await api('/api/logout','POST');me=null;location.hash='/';render()};
  document.querySelectorAll('.nav a[data-p]').forEach(a=>a.classList.toggle('on',a.dataset.p===h));
@@ -90,7 +108,20 @@ async function list(M){
 }
 function share(z){const url=`${location.origin}/j/${z.code}`,d=document.createElement('dialog');d.innerHTML=`<h3>${esc(z.title)}</h3><img alt="QR" src="/api/qr?text=${encodeURIComponent(url)}" width=220 height=220 style="display:block;margin:auto;background:#fff"><p>رمز الدخول: <b style="font-size:1.4em">${z.code}</b></p><input readonly value="${url}" onfocus=this.select()><div class=row style="margin-top:.7em"><button class="btn p" id=cp>نسخ الرابط</button><button class=btn id=cl>إغلاق</button></div>`;
  document.body.append(d);d.showModal();$('#cp',d).onclick=()=>navigator.clipboard.writeText(url).then(()=>toast('تم النسخ'));$('#cl',d).onclick=()=>{d.close();d.remove()}}
-async function settings(M){const d=await api('/api/me');M.innerHTML=`<h1>الإعدادات</h1><div class=card style="max-width:520px"><h2>حسابك</h2><p><b>البريد الإلكتروني:</b> ${esc(d.email||'—')}</p><p><b>طريقة الدخول:</b> Google</p><p style="color:var(--mut)">بيانات المسابقات محفوظة في مساحة حسابك الخاصة.</p></div><hr><h2>المساعدة</h2><p>يمكنك إعادة مشاهدة شرح مِضمار في أي وقت.</p><button class="btn p" id="replayTour">إعادة شرح الموقع</button>`;$('#replayTour').onclick=showTour}
+async function settings(M){
+ const d=await api('/api/me');
+ M.innerHTML=`<div class=section-heading><span class=eyebrow>التفضيلات والحساب</span><h1>الإعدادات</h1><p>تحكم في مظهر مِضمار وتفاصيل حسابك.</p></div>
+ <div class=settings-grid>
+  <section class=card settings-card><div class=settings-icon>◐</div><div><h2>مظهر الموقع</h2><p>اختر الألوان المناسبة لك. يُحفظ اختيارك على هذا الجهاز ويُطبّق على صفحات المعلم والطالب ولوحة العرض.</p></div>
+   <div class=theme-choices><button class="btn" data-theme-choice=light type=button>☀ الوضع الساطع</button><button class="btn" data-theme-choice=dark type=button>☾ الوضع المظلم</button></div><small id=themeModeStatus class=settings-hint></small>
+  </section>
+  <section class=card settings-card><div class=settings-icon">◎</div><div><h2>حسابك</h2><p><b>البريد الإلكتروني:</b> ${esc(d.email||'—')}</p><p><b>طريقة الدخول:</b> Google</p><small class=settings-hint>تُحفظ مسابقاتك ضمن مساحة حسابك الخاصة.</small></div></section>
+  <section class=card settings-card><div class=settings-icon>?</div><div><h2>المساعدة</h2><p>يمكنك إعادة مشاهدة شرح أقسام الموقع وطريقة إنشاء المسابقات ومتابعة النتائج.</p><button class="btn p" id=replayTour>إعادة شرح الموقع</button></div></section>
+ </div>`;
+ applyTheme(currentTheme,false);
+ document.querySelectorAll('[data-theme-choice]').forEach(x=>x.onclick=()=>applyTheme(x.dataset.themeChoice));
+ $('#replayTour').onclick=showTour;
+}
 const toMs=v=>v?new Date(v).getTime():null,fromMs=v=>v?new Date(v-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,16):'';
 const readImg=f=>new Promise((res,rej)=>{if(!f)return res('');if(f.size>1.5e6)return rej(Error('الصورة كبيرة (الحد 1.5 ميغابايت)'));const r=new FileReader();r.onload=()=>res(r.result);r.readAsDataURL(f)});
 async function editor(M,id){
