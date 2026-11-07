@@ -263,3 +263,5 @@ html[data-theme="light"] .board-page .first{background:linear-gradient(135deg,#f
 html[data-theme="light"] .board-page .first .time{color:#687997}
 html[data-theme="light"] .board-page .theme-toggle{background:#fff;color:#1e459f;border-color:#d9e3f5}
 @media(max-width:650px){.settings-card{grid-template-columns:40px minmax(0,1fr)}.theme-choices{flex-direction:column}.theme-choices .btn{width:100%}}
+
+.settings-hint{grid-column:1/-1}
