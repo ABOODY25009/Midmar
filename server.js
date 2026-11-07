@@ -29,6 +29,14 @@ function addColumn(table,column,definition){try{db.exec('ALTER TABLE '+table+' A
 addColumn('teachers','email','TEXT');
 addColumn('teachers','provider','TEXT');
 addColumn('teachers','provider_sub','TEXT');
+addColumn('teachers','onboarding_version','INTEGER NOT NULL DEFAULT 0');
+db.exec("CREATE TABLE IF NOT EXISTS app_migrations(id TEXT PRIMARY KEY, applied INTEGER NOT NULL)");
+if(!db.prepare("SELECT 1 FROM app_migrations WHERE id='onboarding-v2-existing-users'").get()){
+ db.transaction(()=>{
+  db.prepare('UPDATE teachers SET onboarding_version=1').run();
+  db.prepare("INSERT INTO app_migrations(id,applied) VALUES('onboarding-v2-existing-users',?)").run(now());
+ })();
+}
 addColumn('quizzes','participation_mode',"TEXT DEFAULT 'groups'");addColumn('quizzes','entry_mode',"TEXT DEFAULT 'both'");addColumn('quizzes','progression_mode',"TEXT DEFAULT 'sequential'");addColumn('quizzes','unlocked_question','INTEGER DEFAULT 0');
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS teachers_oauth_identity ON teachers(provider,provider_sub) WHERE provider IS NOT NULL AND provider_sub IS NOT NULL');
 db.exec('DELETE FROM oauth_states WHERE created < '+(now()-10*60e3));
@@ -37,10 +45,18 @@ const APP_BASE_URL=(process.env.APP_BASE_URL||'').replace(/\/$/,'');
 const GOOGLE_REDIRECT_URI=process.env.GOOGLE_REDIRECT_URI||(APP_BASE_URL?APP_BASE_URL+'/auth/google/callback':'');
 const cookieOptions=()=> 'HttpOnly; SameSite=Lax; Path=/; Max-Age=1209600'+(process.env.NODE_ENV==='production'?'; Secure':'');
 const login=(s,id)=>{const sid=crypto.randomBytes(32).toString('hex');db.prepare('INSERT INTO sessions VALUES(?,?,?)').run(sid,id,now());s.setHeader('Set-Cookie','sid='+sid+'; '+cookieOptions())};
-function currentTeacher(q){const sid=cookie(q,'sid');if(!/^[a-f0-9]{64}$/.test(sid))return null;return db.prepare('SELECT t.id,t.username,t.email,t.provider FROM sessions x JOIN teachers t ON t.id=x.teacher_id WHERE x.sid=? AND x.created>?').get(sid,now()-14*24*60*60e3)||null}
+function currentTeacher(q){const sid=cookie(q,'sid');if(!/^[a-f0-9]{64}$/.test(sid))return null;return db.prepare('SELECT t.id,t.username,t.email,t.provider,t.onboarding_version FROM sessions x JOIN teachers t ON t.id=x.teacher_id WHERE x.sid=? AND x.created>?').get(sid,now()-14*24*60*60e3)||null}
 function auth(q,s,n){const t=currentTeacher(q);if(!t)return s.status(401).json({error:'يلزم تسجيل الدخول بحساب Google'});q.tid=t.id;q.teacher=t;n()}
 app.get('/api/version',(q,s)=>s.json({version:APP_VERSION}));
 app.get('/api/me',(q,s)=>{const t=currentTeacher(q);s.json(t?{authenticated:true,user:t.username,email:t.email,provider:t.provider}:{authenticated:false})});
+app.get('/api/onboarding',auth,(q,s)=>{
+ const v=Number(q.teacher.onboarding_version||0);
+ s.json({version:v,showTutorial:v===0,showUpdateNotice:v===1});
+});
+app.post('/api/onboarding/complete',auth,(q,s)=>{
+ db.prepare('UPDATE teachers SET onboarding_version=2 WHERE id=?').run(q.tid);
+ s.json({ok:true,version:2});
+});
 app.get('/auth/google',(q,s)=>{
  if(!process.env.GOOGLE_CLIENT_ID||!process.env.GOOGLE_CLIENT_SECRET||!GOOGLE_REDIRECT_URI)return s.redirect('/?auth_error=not_configured');
  const state=crypto.randomBytes(32).toString('hex');
