@@ -36,7 +36,7 @@ async function onboarding(){
   d.innerHTML='<div class="brand-card" style="display:block"><small>مِضمار 2.0</small><h2>تم تحديث مِضمار</h2><p>أضفنا دليلًا تفاعليًا يشرح أقسام الموقع وطريقة إنشاء المسابقات ومتابعة النتائج. يمكنك بدء الشرح الآن أو تشغيله لاحقًا من الإعدادات.</p><div class="row"><button class="btn" id="updateLater">لاحقًا</button><span class="sp"></span><button class="btn p" id="updateStart">ابدأ الشرح</button></div></div>';
   document.body.append(d);d.showModal();
   $('#updateLater',d).onclick=async()=>{await finishOnboarding();d.close();d.remove()};
-  $('#updateStart',d).onclick=async()=>{await finishOnboarding();d.close();d.remove();showTour()};
+  $('#updateStart',d).onclick=()=>{d.close();d.remove();showTour()};
  }
 }
 async function render(){
