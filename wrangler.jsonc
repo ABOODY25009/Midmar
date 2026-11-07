@@ -1,0 +1,26 @@
+{
+  "name": "midmar-v2-dev",
+  "main": "cloudflare/worker.js",
+  "compatibility_date": "2026-11-07",
+  "vars": {
+    "GOOGLE_REDIRECT_URI": "https://midmar-v2-dev.midmar-v2-dev.workers.dev/auth/google/callback"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "midmar-dev",
+      "database_id": "bab4fc12-ea49-41d8-8925-e70284f03be1",
+      "migrations_dir": "cloudflare/migrations"
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true
+    },
+    "traces": {
+      "enabled": true
+    }
+  }
+}
