@@ -3,7 +3,30 @@
 <style>body{-webkit-user-select:none;user-select:none}.top{background:var(--g2);color:#fff;padding:.6em 1em}.top .bar{background:rgba(255,255,255,.25)}.top .bar i{background:var(--gold)}
 .choice{display:block;width:100%;text-align:right;font-size:1.15em;padding:.9em 1em;margin:.5em 0;border:2px solid var(--line);border-radius:14px;background:var(--card);cursor:pointer;min-height:56px}
 .choice.sel{border-color:var(--g);background:rgba(14,124,90,.12)}.choice.right{border-color:var(--ok);background:rgba(30,142,90,.2)}.choice.wrong{border-color:var(--red);background:rgba(194,58,58,.15)}
-.big{font-size:3em;font-weight:700;line-height:1.1}.fb{padding:.6em 1em;border-radius:10px;margin:.6em 0;font-weight:700}.fb.ok{background:rgba(30,142,90,.2)}.fb.no{background:rgba(194,58,58,.15)}</style></head><body><div id=app></div>
+.big{font-size:3em;font-weight:700;line-height:1.1}.fb{padding:.6em 1em;border-radius:10px;margin:.6em 0;font-weight:700}.fb.ok{background:rgba(30,142,90,.2)}.fb.no{background:rgba(194,58,58,.15)}</style>
+<style>
+body{background:linear-gradient(145deg,#edf5f1,#f7f9f8 55%,#eef4f1);color:#1b3037}
+#app{min-height:100vh}
+.top{position:sticky;top:0;z-index:6;background:linear-gradient(115deg,#075b49,#0b8667);box-shadow:0 8px 28px #073c2d28;padding:.8em max(1em,calc((100vw - 760px)/2))}
+.top .row{gap:.8em}
+.top b{font-size:1.08em;letter-spacing:-.02em}
+.top .bar{height:7px;border-radius:99px;background:#ffffff35}
+.top .bar i{border-radius:99px;background:#f2c44c}
+.wrap{max-width:760px;padding:1.5em 1.1em 3em}
+.wrap>h2{margin:.3em 0 1em;padding:1.15em 1.25em;background:#fff;border:1px solid #dce8e3;border-radius:18px;box-shadow:0 8px 26px #153d2d0c;font-size:clamp(1.2rem,3vw,1.7rem);line-height:1.65}
+.choice{border-radius:15px;border:1.5px solid #d9e5df;background:#fff;min-height:58px;padding:1em 1.1em;margin:.7em 0;font-weight:650;box-shadow:0 3px 12px #183d2b08;transition:transform .15s,border-color .15s,background .15s}
+.choice:hover{border-color:#8db9a7;transform:translateY(-1px)}
+.choice.sel{border-color:#0e8765;background:#e8f5ef;box-shadow:0 0 0 3px #0e87651a}
+.choice.right{border-color:#16855d;background:#e5f6ee}
+.choice.wrong{border-color:#bd4952;background:#fff0f1}
+#ok{min-height:52px;border-radius:15px;margin-top:1em;font-weight:750;box-shadow:0 8px 22px #087f6322}
+#ok:disabled{opacity:.55;box-shadow:none}
+.fb{border-radius:13px;padding:.8em 1em}
+.card.narrow{border-radius:22px;border-color:#d9e6e0;box-shadow:0 18px 50px #153e3016}
+.card.narrow h1{color:#0a7157}
+.tag{margin:.35em 0}
+@media(max-width:560px){.top{padding:.7em .85em}.wrap{padding:1em .8em 2em}.wrap>h2{padding:.95em}.choice{font-size:1.02em}}
+</style></head><body><div id=app></div>
 <script>
 const code=location.pathname.split('/').pop(),KEY='mid_'+code,app=document.getElementById('app');let token=localStorage.getItem(KEY),S=null,sel=null,orderSel=[],busy=false,timer=null,waitTimer=null,off=0;
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
