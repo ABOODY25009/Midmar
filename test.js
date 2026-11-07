@@ -44,5 +44,8 @@ const ok=(n,c)=>{res.push(c);console.log((c?'✔ ':'✘ ')+n)};
  ok('حذف مع نتائج',(await f('/api/quizzes/'+cp.j.id,'DELETE')).s===200);
  so.close();proc.kill();await new Promise(r=>setTimeout(r,500));await start();ck='';
  ok('البيانات باقية بعد إعادة تشغيل الخادم',(await f('/api/login','POST',{username:'t',code:'1234'})).s===200&&(await f('/api/quizzes/'+id)).j.questions.length===3&&(await f(`/api/board/${z.code}`)).j.rows.length===5);
+ const sid=ck.split('=')[1];new (require('node:sqlite').DatabaseSync)(DB).prepare('UPDATE sessions SET created=? WHERE sid=?').run(Date.now()-400*24*60*60*1000,sid);
+ ok('الجلسة تبقى صالحة بعد مرور أكثر من 14 يومًا',(await f('/api/me')).j.authenticated===true);
+ await f('/api/logout','POST');ok('تسجيل الخروج اليدوي ينهي الجلسة',(await f('/api/me')).j.authenticated===false);
  let blocked=0;for(let i=0;i<12;i++)if((await f('/api/login','POST',{username:'t',code:'0000'},'')).s===429)blocked++;ok('حماية من محاولات الدخول المتكررة',blocked>0);
  proc.kill();console.log(`\n${res.filter(Boolean).length}/${res.length} نجحت`);process.exit(res.every(Boolean)?0:1)})().catch(e=>{console.error(e);proc&&proc.kill();process.exit(1)});
