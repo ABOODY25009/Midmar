@@ -1,6 +1,6 @@
 import { ASSETS } from "./assets.js";
 
-const APP_VERSION = "2.1.0";
+const APP_VERSION = "2.2.0";
 const json = (data,status=200,headers={}) => new Response(JSON.stringify(data),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store",...headers}});
 const text = (value,status=200,headers={}) => new Response(value,{status,headers});
 const now = () => Date.now();
