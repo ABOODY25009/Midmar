@@ -60,16 +60,34 @@ async function home(M){const d=await api('/api/dashboard');M.innerHTML=`<header 
  <div class=card style="margin-top:1em"><h2>متوسط الدرجات حسب المسابقة</h2>${d.chart.length?chart(d.chart):'<p>أنشئي مسابقة لتظهر هنا النتائج.</p>'}</div>
  <div class=card style="margin-top:1em"><h2>آخر المسابقات</h2>${d.recent.map(r=>`<p><a href="#/quiz/${r.id}/results">${esc(r.title)}</a> ${r.archived?'<span class=tag>مؤرشفة</span>':''}</p>`).join('')||'<p>لا توجد مسابقات بعد.</p>'}</div>`}
 let tab='active';
-async function list(M){const all=await api('/api/quizzes');const L=all.filter(z=>tab==='active'?!z.archived:z.archived);
- M.innerHTML=`<div class=row><h1 class=sp>المسابقات</h1><button class="btn ${tab==='active'?'p':''}" data-t=active>النشطة</button><button class="btn ${tab==='arch'?'p':''}" data-t=arch>السابقة (المؤرشفة)</button></div>
- ${L.map(z=>`<div class=card style="margin:.7em 0"><div class=row><div class=sp><h3 style="margin:0">${esc(z.title)}</h3><small style="color:var(--mut)">${z.nq} سؤال · ${z.ng} مجموعة · الرمز ${z.code}</small></div>
- <a class="btn p" target=_blank href="/board/${z.code}">ابدأ المسابقة</a><a class="btn s" href="#/quiz/${z.id}/results">النتائج</a><a class="btn s" href="#/quiz/${z.id}/edit">تعديل</a>
- <button class="btn s" data-a=copy data-id=${z.id}>نسخ</button><button class="btn s" data-a=arch data-id=${z.id}>${z.archived?'إلغاء الأرشفة':'أرشفة'}</button><button class="btn s d" data-a=del data-id=${z.id}>حذف</button></div></div>`).join('')||'<p>لا توجد مسابقات هنا.</p>'}<div class=card style="margin-top:1em;text-align:center"><h3>ابدأ اختبارًا جديدًا</h3><p>أنشئ مسابقة وحدد طريقة المشاركة ثم أضف الأسئلة.</p><a class="btn p" href="#/quiz/new">+ إنشاء مسابقة</a></div>`;
- M.onclick=async e=>{const b=e.target.closest('button');if(!b)return;if(b.dataset.t){tab=b.dataset.t;return list(M)}const id=b.dataset.id,z=all.find(x=>x.id==id);
-  if(b.dataset.a==='copy'){await api(`/api/quizzes/${id}/copy`,'POST');toast('تم النسخ');list(M)}
-  if(b.dataset.a==='arch'){await api(`/api/quizzes/${id}/archive`,'POST');list(M)}
-  if(b.dataset.a==='del'&&await confirmBox(`حذف «${z.title}» ونتائجها نهائيًا؟`)){await api('/api/quizzes/'+id,'DELETE');toast('تم الحذف');list(M)}
-  if(b.dataset.a==='share')share(z)}}
+async function list(M){
+ const all=await api('/api/quizzes');
+ const L=all.filter(z=>tab==='active'?!z.archived:z.archived);
+ let search='';
+ M.innerHTML=`<div class=library-head><div><span class=eyebrow>إدارة المحتوى</span><h1>مكتبة المسابقات</h1><p>كل اختباراتك ومسابقاتك في مكان واحد.</p></div><a class="btn p" href="#/quiz/new">+ إنشاء مسابقة</a></div>
+ <section class=library-toolbar><div class=library-tabs><button class="btn ${tab==='active'?'p':''}" data-t=active>النشطة <span>${all.filter(z=>!z.archived).length}</span></button><button class="btn ${tab==='arch'?'p':''}" data-t=arch>الأرشيف <span>${all.filter(z=>z.archived).length}</span></button></div><div class=library-search><span aria-hidden=true>⌕</span><input id=quizSearch type=search placeholder="ابحث باسم المسابقة أو رمزها..." autocomplete=off></div></section>
+ <div class=library-summary><strong id=libraryCount>${L.length}</strong><span>مسابقة في هذا القسم</span></div>
+ <div id=quizGrid class=quiz-grid></div>`;
+ const grid=$('#quizGrid',M),count=$('#libraryCount',M);
+ const draw=()=>{
+  const q=search.trim().toLocaleLowerCase('ar');
+  const rows=L.filter(z=>String(z.title||'').toLocaleLowerCase('ar').includes(q)||String(z.code||'').includes(q));
+  count.textContent=rows.length;
+  grid.innerHTML=rows.map(z=>`<article class=card quiz-card><div class=quiz-card-top><div class=quiz-card-icon>${z.archived?'▣':'✦'}</div><div class=quiz-card-title><h3>${esc(z.title)}</h3><span class=quiz-status ${z.archived?'data-archived':''}>${z.archived?'مؤرشفة':'نشطة'}</span></div><div class=quiz-code><small>رمز الدخول</small><strong>${z.code}</strong></div></div><div class=quiz-facts><span><b>${z.nq}</b> سؤال</span><i></i><span><b>${z.ng}</b> مشارك</span></div><div class=quiz-actions><a class="btn p" target=_blank rel=noopener href="/board/${z.code}">لوحة المسابقة</a><a class="btn" href="#/quiz/${z.id}/results">النتائج</a><a class="btn" href="#/quiz/${z.id}/edit">تعديل</a><button class="btn" data-a=copy data-id=${z.id}>نسخ</button><button class="btn" data-a=arch data-id=${z.id}>${z.archived?'استعادة':'أرشفة'}</button><button class="btn d" data-a=del data-id=${z.id}>حذف</button></div></article>`).join('')||`<div class=library-empty><div>⌕</div><h3>${q?'لا توجد نتائج مطابقة':'لا توجد مسابقات هنا'}</h3><p>${q?'جرّب البحث باسم مختلف أو رمز الدخول.':'أنشئ أول مسابقة لتظهر هنا.'}</p>${q?'':'<a class="btn p" href="#/quiz/new">إنشاء مسابقة</a>'}</div>`;
+ };
+ draw();
+ $('#quizSearch',M).oninput=e=>{search=e.target.value;draw()};
+ M.onclick=async e=>{
+  const b=e.target.closest('button');if(!b)return;
+  if(b.dataset.t){tab=b.dataset.t;return list(M)}
+  const id=b.dataset.id,z=all.find(x=>x.id==id);
+  try{
+   if(b.dataset.a==='copy'){await api(`/api/quizzes/${id}/copy`,'POST');toast('تم نسخ المسابقة');return list(M)}
+   if(b.dataset.a==='arch'){await api(`/api/quizzes/${id}/archive`,'POST');toast(z.archived?'تمت استعادة المسابقة':'تمت أرشفة المسابقة');return list(M)}
+   if(b.dataset.a==='del'&&await confirmBox(`حذف «${z.title}» ونتائجها نهائيًا؟`)){await api('/api/quizzes/'+id,'DELETE');toast('تم الحذف');return list(M)}
+  }catch(err){toast(err.message)}
+ };
+}
 function share(z){const url=`${location.origin}/j/${z.code}`,d=document.createElement('dialog');d.innerHTML=`<h3>${esc(z.title)}</h3><img alt="QR" src="/api/qr?text=${encodeURIComponent(url)}" width=220 height=220 style="display:block;margin:auto;background:#fff"><p>رمز الدخول: <b style="font-size:1.4em">${z.code}</b></p><input readonly value="${url}" onfocus=this.select()><div class=row style="margin-top:.7em"><button class="btn p" id=cp>نسخ الرابط</button><button class=btn id=cl>إغلاق</button></div>`;
  document.body.append(d);d.showModal();$('#cp',d).onclick=()=>navigator.clipboard.writeText(url).then(()=>toast('تم النسخ'));$('#cl',d).onclick=()=>{d.close();d.remove()}}
 async function settings(M){const d=await api('/api/me');M.innerHTML=`<h1>الإعدادات</h1><div class=card style="max-width:520px"><h2>حسابك</h2><p><b>البريد الإلكتروني:</b> ${esc(d.email||'—')}</p><p><b>طريقة الدخول:</b> Google</p><p style="color:var(--mut)">بيانات المسابقات محفوظة في مساحة حسابك الخاصة.</p></div><hr><h2>المساعدة</h2><p>يمكنك إعادة مشاهدة شرح مِضمار في أي وقت.</p><button class="btn p" id="replayTour">إعادة شرح الموقع</button>`;$('#replayTour').onclick=showTour}
