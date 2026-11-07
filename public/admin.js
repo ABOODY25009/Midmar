@@ -115,7 +115,7 @@ async function settings(M){
   <section class=card settings-card><div class=settings-icon>◐</div><div><h2>مظهر الموقع</h2><p>اختر الألوان المناسبة لك. يُحفظ اختيارك على هذا الجهاز ويُطبّق على صفحات المعلم والطالب ولوحة العرض.</p></div>
    <div class=theme-choices><button class="btn" data-theme-choice=light type=button>☀ الوضع الساطع</button><button class="btn" data-theme-choice=dark type=button>☾ الوضع المظلم</button></div><small id=themeModeStatus class=settings-hint></small>
   </section>
-  <section class=card settings-card><div class=settings-icon">◎</div><div><h2>حسابك</h2><p><b>البريد الإلكتروني:</b> ${esc(d.email||'—')}</p><p><b>طريقة الدخول:</b> Google</p><small class=settings-hint>تُحفظ مسابقاتك ضمن مساحة حسابك الخاصة.</small></div></section>
+  <section class=card settings-card><div class=settings-icon>◎</div><div><h2>حسابك</h2><p><b>البريد الإلكتروني:</b> ${esc(d.email||'—')}</p><p><b>طريقة الدخول:</b> Google</p><small class=settings-hint>تُحفظ مسابقاتك ضمن مساحة حسابك الخاصة.</small></div></section>
   <section class=card settings-card><div class=settings-icon>?</div><div><h2>المساعدة</h2><p>يمكنك إعادة مشاهدة شرح أقسام الموقع وطريقة إنشاء المسابقات ومتابعة النتائج.</p><button class="btn p" id=replayTour>إعادة شرح الموقع</button></div></section>
  </div>`;
  applyTheme(currentTheme,false);
