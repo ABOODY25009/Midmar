@@ -43,9 +43,9 @@ db.exec('DELETE FROM oauth_states WHERE created < '+(now()-10*60e3));
 const APP_VERSION=require('./package.json').version;
 const APP_BASE_URL=(process.env.APP_BASE_URL||'').replace(/\/$/,'');
 const GOOGLE_REDIRECT_URI=process.env.GOOGLE_REDIRECT_URI||(APP_BASE_URL?APP_BASE_URL+'/auth/google/callback':'');
-const cookieOptions=()=> 'HttpOnly; SameSite=Lax; Path=/; Max-Age=1209600'+(process.env.NODE_ENV==='production'?'; Secure':'');
+const cookieOptions=()=> 'HttpOnly; SameSite=Lax; Path=/; Max-Age=315360000'+(process.env.NODE_ENV==='production'?'; Secure':'');
 const login=(s,id)=>{const sid=crypto.randomBytes(32).toString('hex');db.prepare('INSERT INTO sessions VALUES(?,?,?)').run(sid,id,now());s.setHeader('Set-Cookie','sid='+sid+'; '+cookieOptions())};
-function currentTeacher(q){const sid=cookie(q,'sid');if(!/^[a-f0-9]{64}$/.test(sid))return null;return db.prepare('SELECT t.id,t.username,t.email,t.provider,t.onboarding_version FROM sessions x JOIN teachers t ON t.id=x.teacher_id WHERE x.sid=? AND x.created>?').get(sid,now()-14*24*60*60e3)||null}
+function currentTeacher(q){const sid=cookie(q,'sid');if(!/^[a-f0-9]{64}$/.test(sid))return null;return db.prepare('SELECT t.id,t.username,t.email,t.provider,t.onboarding_version FROM sessions x JOIN teachers t ON t.id=x.teacher_id WHERE x.sid=?').get(sid)||null}
 function auth(q,s,n){const t=currentTeacher(q);if(!t)return s.status(401).json({error:'يلزم تسجيل الدخول بحساب Google'});q.tid=t.id;q.teacher=t;n()}
 app.get('/api/version',(q,s)=>s.json({version:APP_VERSION}));
 app.get('/api/me',(q,s)=>{const t=currentTeacher(q);s.json(t?{authenticated:true,user:t.username,email:t.email,provider:t.provider}:{authenticated:false})});
