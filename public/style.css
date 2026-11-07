@@ -73,3 +73,48 @@ dialog{border:1px solid var(--line);border-radius:var(--r);background:var(--card
 #main .card .row{row-gap:.55em}
 @media(max-width:850px){.nav-account{display:none}.nav-brand{margin-inline-end:.4em}.nav-brand small{display:none}}
 @media(max-width:620px){.page-head{align-items:flex-start;flex-direction:column;padding:1.05em}.page-head-action{width:100%;justify-content:center}.nav-create{display:none}.nav-brand strong{font-size:1.1rem}.nav .wrap{min-height:60px}}
+
+/* مكتبة المسابقات */
+.library-head{display:flex;justify-content:space-between;align-items:center;gap:1em;margin:0 0 1.1em}
+.library-head h1{margin:.2em 0}.library-head p{margin:0;color:var(--mut)}
+.library-toolbar{display:flex;align-items:center;justify-content:space-between;gap:1em;padding:.75em;background:#fff;border:1px solid var(--line);border-radius:18px}
+.library-tabs{display:flex;gap:.45em;flex-wrap:wrap}
+.library-tabs .btn{border-color:transparent;background:transparent}
+.library-tabs .btn.p{background:var(--g);color:#fff}
+.library-tabs .btn span{display:inline-grid;place-items:center;min-width:22px;height:22px;padding:0 .35em;margin-inline-start:.25em;border-radius:99px;background:#ffffff2c;font-size:.8em}
+.library-search{display:flex;align-items:center;gap:.5em;flex:0 1 410px;min-width:220px;padding-inline:.8em;border:1px solid var(--line);background:#f8fbf9;border-radius:12px}
+.library-search>span{font-size:1.35em;color:var(--mut)}
+.library-search input{border:0;background:transparent;outline:0;box-shadow:none;min-height:42px;padding-inline:.15em}
+.library-summary{display:flex;align-items:center;gap:.5em;margin:1.15em 0 .7em;color:var(--mut);font-size:.9em}
+.library-summary strong{display:grid;place-items:center;min-width:27px;height:27px;border-radius:9px;background:#e6f3ee;color:var(--g);font-size:.9rem}
+.quiz-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,390px),1fr));gap:.9em}
+.quiz-card{padding:1.1em 1.15em;display:flex;flex-direction:column;gap:.9em;transition:transform .16s,border-color .16s,box-shadow .16s}
+.quiz-card:hover{transform:translateY(-2px);border-color:#b4d7c9;box-shadow:0 14px 36px #103d2a13}
+.quiz-card-top{display:flex;align-items:center;gap:.75em;min-width:0}
+.quiz-card-icon{width:44px;height:44px;flex:0 0 44px;border-radius:14px;display:grid;place-items:center;background:#e8f5ef;color:var(--g);font-size:1.35em}
+.quiz-card-title{flex:1;min-width:0}
+.quiz-card-title h3{margin:0 0 .25em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:1.05rem}
+.quiz-status{display:inline-flex;align-items:center;gap:.35em;color:#087a58;background:#e7f5ee;border-radius:99px;padding:.1em .55em;font-size:.74em;font-weight:750}
+.quiz-status:before{content:"";width:6px;height:6px;border-radius:50%;background:#0b9b68}
+.quiz-status[data-archived]{color:#64717a;background:#eef1f3}
+.quiz-status[data-archived]:before{background:#8b969c}
+.quiz-code{display:flex;flex-direction:column;align-items:flex-end;min-width:76px}
+.quiz-code small{font-size:.7em;color:var(--mut)}
+.quiz-code strong{font-size:1.1em;letter-spacing:.12em;color:var(--g);font-variant-numeric:tabular-nums}
+.quiz-facts{display:flex;align-items:center;gap:.7em;padding:.55em .75em;border-radius:11px;background:#f5f9f7;color:var(--mut);font-size:.85em}
+.quiz-facts b{color:var(--ink);font-size:1.08em}
+.quiz-facts i{height:16px;width:1px;background:var(--line)}
+.quiz-actions{display:flex;align-items:center;gap:.4em;flex-wrap:wrap}
+.quiz-actions .btn{min-height:36px;padding:.3em .7em;font-size:.82em}
+.quiz-actions .btn.p{margin-inline-end:auto}
+.library-empty{grid-column:1/-1;text-align:center;padding:2.8em 1em;border:1px dashed #bfd2ca;border-radius:18px;background:#fbfdfc}
+.library-empty>div{font-size:2rem;color:var(--g)}
+.library-empty p{color:var(--mut);margin:.2em 0 1em}
+@media(max-width:700px){
+ .library-head{align-items:flex-start;flex-direction:column}
+ .library-head>.btn{width:100%;justify-content:center}
+ .library-toolbar{align-items:stretch;flex-direction:column}
+ .library-search{min-width:0;flex-basis:auto}
+ .quiz-actions .btn.p{margin-inline-end:0}
+ .quiz-card{padding:1em}
+}
