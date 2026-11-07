@@ -1,17 +1,32 @@
-# إعداد تسجيل الدخول في مِضمار Cloudflare
+# إعداد نسخة مِضمار على Cloudflare
 
-افتح Cloudflare Dashboard ثم Workers & Pages ثم Worker `midmar-v2-dev` ثم Settings > Variables and Secrets.
+## إعداد Wrangler
+ملف `wrangler.jsonc` موجود في جذر المشروع ويحتوي مسبقًا على:
+- اسم Worker: `midmar-v2-dev`
+- نقطة الدخول: `cloudflare/worker.js`
+- ربط قاعدة D1: `midmar-dev`
+- متغير `GOOGLE_REDIRECT_URI` كقيمة نصية عادية ضمن `vars`.
 
-أضف:
-- `GOOGLE_CLIENT_ID` كـ Secret.
-- `GOOGLE_CLIENT_SECRET` كـ Secret.
-- `GOOGLE_REDIRECT_URI` كـ Plain text بالقيمة التالية:
-  `https://midmar-v2-dev.midmar-v2-dev.workers.dev/auth/google/callback`
+لا حاجة لإضافة `GOOGLE_REDIRECT_URI` مرة أخرى من لوحة Cloudflare إذا كنت تنشر باستخدام هذا الملف؛ يجب الحفاظ على نفس القيمة في الإعدادين.
 
-بعد ذلك افتح Google Cloud Console > APIs & Services > Credentials، ثم OAuth 2.0 Client ID، وأضف نفس رابط callback في قائمة Authorized redirect URIs.
+## إعداد تسجيل الدخول Google
+في Cloudflare Dashboard افتح Worker `midmar-v2-dev` ثم Settings > Variables and Secrets، وأضف الأسرار التالية:
+- `GOOGLE_CLIENT_ID` — Secret
+- `GOOGLE_CLIENT_SECRET` — Secret
 
-يمكن إضافة `GOOGLE_OWNER_EMAIL` اختياريًا لربط بريد مالك قديم بسجله السابق إن كانت قاعدة D1 تحتوي ذلك السجل. قاعدة D1 الحالية فارغة، لذلك أول تسجيل دخول سيُنشئ حسابًا جديدًا.
+لا تضع هذه القيم في `wrangler.jsonc` أو GitHub.
 
-مفتاح `OPENAI_API_KEY` اختياري ولا يلزم لتشغيل بقية وظائف المسابقات؛ بدونه تبقى قراءة أوراق الأسئلة بالذكاء الاصطناعي غير مفعلة.
+## إعداد Google Cloud Console
+في OAuth 2.0 Client من نوع Web application، أضف هذا الرابط ضمن Authorized redirect URIs:
 
-لا تضع القيم السرية في GitHub أو في ملف الواجهة الأمامية.
+`https://midmar-v2-dev.midmar-v2-dev.workers.dev/auth/google/callback`
+
+## إعدادات اختيارية
+- `GOOGLE_OWNER_EMAIL` — اختياري، لربط هوية مالك مع سجل موجود في D1.
+- `OPENAI_API_KEY` — اختياري لتفعيل قراءة أوراق الأسئلة بالذكاء الاصطناعي.
+
+## قاعدة البيانات
+- قاعدة D1: `midmar-dev`.
+- معرفها مضبوط في `wrangler.jsonc`.
+- مجلد الترحيلات: `cloudflare/migrations`.
+- لا تشغّل ترحيلات على قاعدة أخرى؛ هذه النسخة مستقلة عن Render.
