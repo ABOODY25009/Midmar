@@ -26,10 +26,15 @@ body{background:linear-gradient(145deg,#edf5f1,#f7f9f8 55%,#eef4f1);color:#1b303
 .card.narrow h1{color:#0a7157}
 .tag{margin:.35em 0}
 @media(max-width:560px){.top{padding:.7em .85em}.wrap{padding:1em .8em 2em}.wrap>h2{padding:.95em}.choice{font-size:1.02em}}
-</style></head><body><div id=app></div>
+</style></head><body class="player-page"><div id=app></div>
 <script>
 const code=location.pathname.split('/').pop(),KEY='mid_'+code,app=document.getElementById('app');let token=localStorage.getItem(KEY),S=null,sel=null,orderSel=[],busy=false,timer=null,waitTimer=null,off=0;
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const THEME_KEY='midmar-theme';
+function setPlayerTheme(theme,save=true){const next=theme==='dark'?'dark':'light';document.documentElement.dataset.theme=next;if(save)localStorage.setItem(THEME_KEY,next);const b=document.getElementById('playerThemeToggle');if(b){b.textContent=next==='dark'?'☀ الوضع الساطع':'☾ الوضع المظلم';b.setAttribute('aria-label',next==='dark'?'التبديل إلى الوضع الساطع':'التبديل إلى الوضع المظلم')}}
+setPlayerTheme(localStorage.getItem(THEME_KEY)||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'),false);
+const playerThemeButton=document.createElement('button');playerThemeButton.id='playerThemeToggle';playerThemeButton.className='floating-theme-toggle';playerThemeButton.type='button';playerThemeButton.onclick=()=>setPlayerTheme(document.documentElement.dataset.theme==='dark'?'light':'dark');document.body.append(playerThemeButton);
+
 async function api(u,m='GET',b){const r=await fetch(u,{method:m,headers:b?{'Content-Type':'application/json'}:{},body:b?JSON.stringify(b):undefined});const j=await r.json().catch(()=>({}));if(!r.ok){const e=Error(j.error||'حدث خطأ');e.data=j;throw e}return j}
 async function start(){if(token){try{S=await api('/api/play/'+token);off=S.now-Date.now();return game()}catch(e){localStorage.removeItem(KEY);token=null}}
  try{const i=await api('/api/join/'+code);intro(i)}catch(e){app.innerHTML=`<div class=center><div class="card narrow"><h2>تعذّر فتح المسابقة</h2><p>${esc(e.message)}</p></div></div>`}}
