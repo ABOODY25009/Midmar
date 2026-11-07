@@ -60,21 +60,27 @@ canvas{position:fixed;inset:0;pointer-events:none;z-index:9}
 .brand-mark img{width:30px;height:30px}
 @media(max-width:760px){.hd{padding:.8em 1em}.stats{padding:.7em 1em}.stage{padding:1em}.results-card,.qr-card{border-radius:17px}}
 </style></head>
-<body>
-<header class="hd"><h1 id="title">مِضمار – لوحة المسابقة</h1><span class="spacer"></span><button class="btn" id="fs">ملء الشاشة</button><span class="brand-mark" title="حقوق إنتريت" aria-label="حقوق إنتريت"><img src="/entrit-logo.svg" alt="إنتريت"></span></header>
+<body class="board-page">
+<header class="hd"><h1 id="title">مِضمار – لوحة المسابقة</h1><span class="spacer"></span><button class="btn" id="fs">ملء الشاشة</button><button class="btn theme-toggle" id="themeToggle" type="button">☾ الوضع المظلم</button><span class="brand-mark" title="حقوق إنتريت" aria-label="حقوق إنتريت"><img src="/entrit-logo.svg" alt="إنتريت"></span></header>
 <div class="stats"><span id="joined">الفرق المشاركة: 0</span><span id="finished">أنهت المسابقة: 0</span><span id="playing">تلعب الآن: 0</span></div>
 <main class="stage">
 <aside class="qr-card" id="qr-card"><h2>امسح رمز QR للانضمام</h2><img id="qr" alt="رمز الانضمام"><div class="code" id="code"></div><p>افتح كاميرا الجوال وامسح الرمز</p><p id="join-url" style="font-size:.8em;overflow-wrap:anywhere"></p></aside>
 <section class="results-card" id="results"><div class="waiting"><h2>بانتظار الفرق</h2><p>امسحوا رمز QR للانضمام إلى المسابقة</p></div></section>
 </main><canvas id="confetti"></canvas>
-<script src="/socket.io/socket.io.js"></script>
+
 <script>
 const code=location.pathname.split('/').pop(),$=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const duration=s=>{s=Math.max(0,Number(s)||0);return s>=60?Math.floor(s/60)+'د '+String(s%60).padStart(2,'0')+'ث':s+'ث'};
 const joinUrl=location.origin+'/j/'+encodeURIComponent(code);
 $('qr').src='/api/qr?text='+encodeURIComponent(joinUrl);$('code').textContent=code;$('join-url').textContent=joinUrl;
 $('fs').onclick=()=>document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen();
-const socket=io();socket.on('connect',()=>socket.emit('watch',code));socket.on('board',draw);
+const THEME_KEY='midmar-theme';
+function setBoardTheme(theme,save=true){const next=theme==='dark'?'dark':'light';document.documentElement.dataset.theme=next;if(save)localStorage.setItem(THEME_KEY,next);const b=$('themeToggle');if(b){b.innerHTML=next==='dark'?'☀ الوضع الساطع':'☾ الوضع المظلم';b.setAttribute('aria-label',next==='dark'?'التبديل إلى الوضع الساطع':'التبديل إلى الوضع المظلم')}}
+setBoardTheme(localStorage.getItem(THEME_KEY)||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'),false);
+$('themeToggle').onclick=()=>setBoardTheme(document.documentElement.dataset.theme==='dark'?'light':'dark');
+let boardRefreshTimer=null;
+async function refreshBoard(){try{const r=await fetch('/api/board/'+encodeURIComponent(code),{cache:'no-store'});if(!r.ok)return;const d=await r.json();const signature=JSON.stringify(d);if(signature!==window.lastBoardSignature){window.lastBoardSignature=signature;draw(d)}}catch(e){console.warn('تعذر تحديث اللوحة',e)}}
+refreshBoard();boardRefreshTimer=setInterval(refreshBoard,1200);
 let announced=null;
 function progressMatrix(d){if(!d.rows?.length)return '<div class="waiting"><p>لا يوجد مشاركون حتى الآن.</p></div>';const qs=d.questions||[];return `<div class="progress-wrap"><h2>متابعة تقدم المشاركين</h2><div style="overflow:auto"><table class="progress-table"><thead><tr><th>المشارك</th>${qs.map((q,i)=>`<th>س${i+1}</th>`).join('')}</tr></thead><tbody>${d.rows.map(r=>`<tr><th>${esc(r.name)}</th>${(r.progress||[]).map(p=>`<td title="${p.status==='done'?'مكتمل':p.status==='active'?'قيد التنفيذ':'لم يبدأ'}">${p.status==='done'?'✓':p.status==='active'?'◉':'·'}</td>`).join('')}</tr>`).join('')}</tbody></table></div><p class="meta">✓ مكتمل · ◉ قيد التنفيذ · · لم يبدأ</p></div>`}
 function draw(d){
