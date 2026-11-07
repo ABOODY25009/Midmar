@@ -11,6 +11,34 @@ async function loginScreen(){
  const message=error==='not_configured'?'تسجيل Google غير مهيأ في إعدادات الخادم.':error?'تعذر تسجيل الدخول عبر Google. حاول مرة أخرى.':'';
  app.innerHTML=`<main class="center"><section class="card narrow login-card"><h1>مِضمار</h1><p>سجّل الدخول بحساب Google لعرض مسابقاتك وأعمالك الخاصة.</p>${message?`<p class="err">${esc(message)}</p>`:''}<a class="btn p google-login" href="/auth/google"><span aria-hidden="true">G</span> تسجيل الدخول باستخدام Google</a><small>كل حساب له مساحة خاصة لا يطلع عليها الآخرون.</small></section></main>`;
 }
+let onboardingState=null;
+const tourSteps=[
+ {title:'الرئيسية',text:'هنا تتابع عدد مسابقاتك والمجموعات المشاركة ومتوسط الدرجات وأعلى نتيجة.'},
+ {title:'المسابقات',text:'من صفحة المسابقات تدير اختباراتك، وتفتح النتائج، وتعدّل المسابقة أو تنسخها أو تؤرشفها.'},
+ {title:'إنشاء مسابقة',text:'أنشئ مسابقة جديدة، أضف الأسئلة والخيارات وحدد الإجابة الصحيحة والوقت وطريقة المشاركة.'},
+ {title:'لوحة العرض ورمز الدخول',text:'ابدأ المسابقة وافتح لوحة العرض. شارك رمز الدخول أو رمز QR مع الطلاب للانضمام.'},
+ {title:'النتائج والتقارير',text:'تابع ترتيب المجموعات والدرجات والإحصاءات، ويمكنك تصدير النتائج عند توفرها.'},
+ {title:'الإعدادات',text:'راجع الحساب، ويمكنك الرجوع إلى هذا الشرح لاحقًا من صفحة الإعدادات.'}
+];
+async function finishOnboarding(){await api('/api/onboarding/complete','POST');onboardingState={version:2,showTutorial:false,showUpdateNotice:false}}
+function showTour(){
+ let i=0;const d=document.createElement('dialog');d.className='brand-dialog';
+ const draw=()=>{const x=tourSteps[i];d.innerHTML=`<div class="brand-card" style="display:block"><small>دليل مِضمار · ${i+1} من ${tourSteps.length}</small><h2>${esc(x.title)}</h2><p>${esc(x.text)}</p><div class="row"><button class="btn" id="tourSkip">تخطي الشرح</button><span class="sp"></span><button class="btn p" id="tourNext">${i===tourSteps.length-1?'إنهاء':'التالي'}</button></div></div>`;
+ $('#tourSkip',d).onclick=async()=>{await finishOnboarding();d.close();d.remove()};
+ $('#tourNext',d).onclick=async()=>{if(i<tourSteps.length-1){i++;draw()}else{await finishOnboarding();d.close();d.remove();toast('اكتمل الشرح')}}};
+ document.body.append(d);draw();d.showModal();
+}
+async function onboarding(){
+ onboardingState=await api('/api/onboarding');
+ if(onboardingState.showTutorial){showTour();return}
+ if(onboardingState.showUpdateNotice){
+  const d=document.createElement('dialog');d.className='brand-dialog';
+  d.innerHTML='<div class="brand-card" style="display:block"><small>مِضمار 2.0</small><h2>تم تحديث مِضمار</h2><p>أضفنا دليلًا تفاعليًا يشرح أقسام الموقع وطريقة إنشاء المسابقات ومتابعة النتائج. يمكنك بدء الشرح الآن أو تشغيله لاحقًا من الإعدادات.</p><div class="row"><button class="btn" id="updateLater">لاحقًا</button><span class="sp"></span><button class="btn p" id="updateStart">ابدأ الشرح</button></div></div>';
+  document.body.append(d);d.showModal();
+  $('#updateLater',d).onclick=async()=>{await finishOnboarding();d.close();d.remove()};
+  $('#updateStart',d).onclick=async()=>{await finishOnboarding();d.close();d.remove();showTour()};
+ }
+}
 async function render(){
  me=await fetch('/api/me').then(r=>r.json()).catch(()=>({authenticated:false}));
  if(!me.authenticated){await loginScreen();return}
@@ -20,7 +48,7 @@ async function render(){
  $('#logoutBtn').onclick=async()=>{await api('/api/logout','POST');me=null;location.hash='/';render()};
  document.querySelectorAll('.nav a[data-p]').forEach(a=>a.classList.toggle('on',a.dataset.p===h));
  const brandDialog=$('#brandDialog');$('#brandOpen').onclick=()=>brandDialog.showModal();$('#brandClose').onclick=()=>brandDialog.close();brandDialog.onclick=e=>{if(e.target===brandDialog)brandDialog.close()};
- const M=$('#main');try{if(h==='/')await home(M);else if(h==='/quizzes')await list(M);else if(h==='/settings')settings(M);
+ const M=$('#main');try{await onboarding();if(h==='/')await home(M);else if(h==='/quizzes')await list(M);else if(h==='/settings')settings(M);
   else if(m&&m[1]==='new')editor(M,null);else if(m&&m[2]==='results')await results(M,m[1]);else if(m)await editor(M,m[1]);else M.textContent='الصفحة غير موجودة'}catch(e){if(e.message!=='401')M.innerHTML='<p class=err>'+esc(e.message)+'</p>'}}
 addEventListener('hashchange',render);
 const dur=s=>s>=60?`${Math.floor(s/60)}د ${s%60}ث`:s+'ث';
@@ -44,7 +72,7 @@ async function list(M){const all=await api('/api/quizzes');const L=all.filter(z=
   if(b.dataset.a==='share')share(z)}}
 function share(z){const url=`${location.origin}/j/${z.code}`,d=document.createElement('dialog');d.innerHTML=`<h3>${esc(z.title)}</h3><img alt="QR" src="/api/qr?text=${encodeURIComponent(url)}" width=220 height=220 style="display:block;margin:auto;background:#fff"><p>رمز الدخول: <b style="font-size:1.4em">${z.code}</b></p><input readonly value="${url}" onfocus=this.select()><div class=row style="margin-top:.7em"><button class="btn p" id=cp>نسخ الرابط</button><button class=btn id=cl>إغلاق</button></div>`;
  document.body.append(d);d.showModal();$('#cp',d).onclick=()=>navigator.clipboard.writeText(url).then(()=>toast('تم النسخ'));$('#cl',d).onclick=()=>{d.close();d.remove()}}
-async function settings(M){const d=await api('/api/me');M.innerHTML=`<h1>الإعدادات</h1><div class=card style="max-width:520px"><h2>حسابك</h2><p><b>البريد الإلكتروني:</b> ${esc(d.email||'—')}</p><p><b>طريقة الدخول:</b> Google</p><p style="color:var(--mut)">بيانات المسابقات محفوظة في مساحة حسابك الخاصة.</p></div>`}
+async function settings(M){const d=await api('/api/me');M.innerHTML=`<h1>الإعدادات</h1><div class=card style="max-width:520px"><h2>حسابك</h2><p><b>البريد الإلكتروني:</b> ${esc(d.email||'—')}</p><p><b>طريقة الدخول:</b> Google</p><p style="color:var(--mut)">بيانات المسابقات محفوظة في مساحة حسابك الخاصة.</p></div><hr><h2>المساعدة</h2><p>يمكنك إعادة مشاهدة شرح مِضمار في أي وقت.</p><button class="btn p" id="replayTour">إعادة شرح الموقع</button>`;$('#replayTour').onclick=showTour}
 const toMs=v=>v?new Date(v).getTime():null,fromMs=v=>v?new Date(v-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,16):'';
 const readImg=f=>new Promise((res,rej)=>{if(!f)return res('');if(f.size>1.5e6)return rej(Error('الصورة كبيرة (الحد 1.5 ميغابايت)'));const r=new FileReader();r.onload=()=>res(r.result);r.readAsDataURL(f)});
 async function editor(M,id){const z=id?await api('/api/quizzes/'+id):{title:'',description:'',image:'',time_limit:0,shuffle_q:0,shuffle_a:0,show_correct:1,allow_retry:0,start_at:null,end_at:null,participation_mode:'groups',entry_mode:'both',progression_mode:'sequential',roster:'',questions:[],ng:0};
