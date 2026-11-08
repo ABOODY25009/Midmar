@@ -22,10 +22,22 @@ function applyTheme(theme,save=true){
 function toggleTheme(){applyTheme(currentTheme==='dark'?'light':'dark')}
 applyTheme(currentTheme,false);
 
+function studentAccessScreen(root){
+ root.innerHTML=`<main class="student-entry-wrap"><section class="card student-entry-card"><img class=student-entry-logo src="/midmar-logo.webp" alt="شعار مِضمار"><span class=eyebrow>منصة المسابقات التفاعلية</span><h1>دخول الطالب</h1><p>أدخل رمز المسابقة الذي شاركه المعلم للانضمام مباشرة.</p><form id=studentEnterForm><label for=studentCode>رمز المسابقة</label><input id=studentCode inputmode=numeric autocomplete=one-time-code maxlength=6 pattern="[0-9]{6}" placeholder="مثال: 123456" required><p class=err id=studentEntryError></p><button class="btn p" type=submit>متابعة إلى المسابقة</button></form><small>لا يحتاج الطالب إلى حساب Google؛ يكفي رمز المسابقة.</small><a class=student-back href="/">العودة إلى اختيار نوع الدخول</a></section></main>`;
+ const form=$('#studentEnterForm',root),codeInput=$('#studentCode',root);
+ codeInput.addEventListener('input',()=>{codeInput.value=codeInput.value.replace(/[^0-9]/g,'').slice(0,6)});
+ form.onsubmit=e=>{e.preventDefault();const code=codeInput.value.trim();if(!/^\\d{6}$/.test(code)){$('#studentEntryError',root).textContent='أدخل رمزًا مكوّنًا من 6 أرقام.';return}location.href='/j/'+code};
+}
 async function loginScreen(){
  const error=new URLSearchParams(location.search).get('auth_error');
  const message=error==='not_configured'?'تسجيل Google غير مهيأ في إعدادات الخادم.':error?'تعذر تسجيل الدخول عبر Google. حاول مرة أخرى.':'';
- app.innerHTML=`<main class="center"><section class="card narrow login-card"><h1>مِضمار</h1><p>سجّل الدخول بحساب Google لعرض مسابقاتك وأعمالك الخاصة.</p>${message?`<p class="err">${esc(message)}</p>`:''}<a class="btn p google-login" href="/auth/google"><span aria-hidden="true">G</span> تسجيل الدخول باستخدام Google</a><small>كل حساب له مساحة خاصة لا يطلع عليها الآخرون.</small></section></main>`;
+ app.innerHTML=`<main class=role-login-wrap><header class=role-brand><img src="/midmar-logo.webp" alt="شعار مِضمار"><p>مسابقات تفاعلية... بطريقة أمتع</p></header>${message?`<p class="err auth-error">${esc(message)}</p>`:''}<h1>كيف تريد الدخول إلى مِضمار؟</h1><p class=role-subtitle>اختر نوع الدخول للمتابعة إلى المساحة المناسبة.</p><div class=role-login-grid>
+ <section class="card role-login-card teacher-login-card"><div class=role-icon>♙</div><span class=eyebrow>إدارة وتعليم</span><h2>أنا معلم</h2><p>أنشئ المسابقات، وأدر الأسئلة والمشاركين، وتابع النتائج والإحصائيات.</p><a class="btn p" href="/auth/google"><span aria-hidden=true>G</span> المتابعة بحساب Google</a><small>دخول آمن إلى لوحة المعلم.</small></section>
+ <section class="card role-login-card student-login-card"><div class=role-icon>▤</div><span class=eyebrow>مشاركة وتحدٍّ</span><h2>أنا طالب</h2><p>انضم إلى مسابقة المعلم باستخدام رمز الدخول، دون إنشاء حساب.</p><form id=studentLoginForm><label for=studentLoginCode>رمز المسابقة</label><input id=studentLoginCode inputmode=numeric maxlength=6 pattern="[0-9]{6}" placeholder="أدخل الرمز المكوّن من 6 أرقام" required><p class=err id=studentLoginError></p><button class="btn p" type=submit>دخول الطالب</button></form><small>يظهر لك الاختبار فور إدخال الرمز الصحيح.</small></section>
+ </div><footer class=role-login-footer>مِضمار · بيئة تعليمية تفاعلية</footer></main>`;
+ const codeInput=$('#studentLoginCode'),form=$('#studentLoginForm');
+ codeInput.addEventListener('input',()=>{codeInput.value=codeInput.value.replace(/[^0-9]/g,'').slice(0,6)});
+ form.onsubmit=e=>{e.preventDefault();const code=codeInput.value.trim();if(!/^\\d{6}$/.test(code)){$('#studentLoginError').textContent='أدخل رمزًا مكوّنًا من 6 أرقام.';return}location.href='/j/'+code};
 }
 let onboardingState=null;
 const tourSteps=[
@@ -56,17 +68,19 @@ async function onboarding(){
  }
 }
 async function render(){
+ const h=location.hash.slice(1)||'/';
+ if(h==='/student'){const status=await fetch('/api/me').then(r=>r.json()).catch(()=>({authenticated:false}));if(status.authenticated){me=status.user?status:null;}studentAccessScreen(app);return}
  me=await fetch('/api/me').then(r=>r.json()).catch(()=>({authenticated:false}));
  if(!me.authenticated){await loginScreen();return}
- const h=location.hash.slice(1)||'/';const m=h.match(/^\/quiz\/(new|\d+)\/?(edit|results)?$/);
- app.innerHTML=`<nav class=nav><div class=wrap><div class=nav-brand><span class=nav-emblem>م</span><div><strong>مِضمار</strong><small>منصة المسابقات التفاعلية</small></div></div><a href="#/" data-p="/">الرئيسية</a><a href="#/quizzes" data-p="/quizzes">المسابقات</a><a href="#/settings" data-p="/settings">الإعدادات</a><a class=nav-create href="#/quiz/new" data-p="/quiz/new">+ إنشاء مسابقة</a><div class=nav-account><span class=nav-avatar>م</span><small>${esc(me.email||"حساب المعلم")}</small></div><span class=sp></span><button class="btn theme-toggle" id="themeToggle" type="button"></button><button class="btn nav-logout" id="logoutBtn" type="button">تسجيل الخروج</button><button class="brand-mark" id="brandOpen" type="button" aria-label="عرض بطاقة التطوير" aria-haspopup="dialog" aria-controls="brandDialog"><span aria-hidden="true">©</span></button><dialog class="brand-dialog" id="brandDialog" aria-labelledby="brandTitle"><div class="brand-card"><img src="/entrit-logo.svg" alt="شعار أنتريت"><div class="brand-copy"><strong id="brandTitle">تطوير أنتريت</strong><span>تم تطوير مِضمار بواسطة أنتريت</span><small id="brandVersion">إصدار الموقع 1.0.0</small></div></div><button class="btn brand-close" id="brandClose" type="button">إغلاق</button></dialog></div></nav><main class=wrap id=main></main>`;
+ const m=h.match(/^\/quiz\/(new|\d+)\/?(edit|results)?$/);
+ app.innerHTML=`<nav class=nav><div class=wrap><div class=nav-brand><span class=nav-emblem>م</span><div><strong>مِضمار</strong><small>منصة المسابقات التفاعلية</small></div></div><a href="#/" data-p="/">الرئيسية</a><a href="#/quizzes" data-p="/quizzes">المسابقات</a><a href="#/settings" data-p="/settings">الإعدادات</a><a href="#/student" data-p="/student">دخول الطلاب</a><a class=nav-create href="#/quiz/new" data-p="/quiz/new">+ إنشاء مسابقة</a><div class=nav-account><span class=nav-avatar>م</span><small>${esc(me.email||"حساب المعلم")}</small></div><span class=sp></span><button class="btn theme-toggle" id="themeToggle" type="button"></button><button class="btn nav-logout" id="logoutBtn" type="button">تسجيل الخروج</button><button class="brand-mark" id="brandOpen" type="button" aria-label="عرض بطاقة التطوير" aria-haspopup="dialog" aria-controls="brandDialog"><span aria-hidden="true">©</span></button><dialog class="brand-dialog" id="brandDialog" aria-labelledby="brandTitle"><div class="brand-card"><img src="/entrit-logo.svg" alt="شعار أنتريت"><div class="brand-copy"><strong id="brandTitle">تطوير أنتريت</strong><span>تم تطوير مِضمار بواسطة أنتريت</span><small id="brandVersion">إصدار الموقع 1.0.0</small></div></div><button class="btn brand-close" id="brandClose" type="button">إغلاق</button></dialog></div></nav><main class=wrap id=main></main>`;
  applyTheme(currentTheme,false);
  $('#themeToggle').onclick=toggleTheme;
  fetch('/api/version').then(r=>r.json()).then(v=>{const el=$('#brandVersion');if(el)el.textContent='إصدار الموقع '+v.version}).catch(()=>{});
  $('#logoutBtn').onclick=async()=>{await api('/api/logout','POST');me=null;location.hash='/';render()};
  document.querySelectorAll('.nav a[data-p]').forEach(a=>a.classList.toggle('on',a.dataset.p===h));
  const brandDialog=$('#brandDialog');$('#brandOpen').onclick=()=>brandDialog.showModal();$('#brandClose').onclick=()=>brandDialog.close();brandDialog.onclick=e=>{if(e.target===brandDialog)brandDialog.close()};
- const M=$('#main');try{await onboarding();if(h==='/')await home(M);else if(h==='/quizzes')await list(M);else if(h==='/settings')settings(M);
+ const M=$('#main');try{await onboarding();if(h==='/')await home(M);else if(h==='/quizzes')await list(M);else if(h==='/settings')settings(M);else if(h==='/student')studentAccessScreen(M);
   else if(m&&m[1]==='new')editor(M,null);else if(m&&m[2]==='results')await results(M,m[1]);else if(m)await editor(M,m[1]);else M.textContent='الصفحة غير موجودة'}catch(e){if(e.message!=='401')M.innerHTML='<p class=err>'+esc(e.message)+'</p>'}}
 addEventListener('hashchange',render);
 const dur=s=>s>=60?`${Math.floor(s/60)}د ${s%60}ث`:s+'ث';
