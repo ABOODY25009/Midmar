@@ -1,4 +1,4 @@
-import { ASSETS } from "./assets.js";
+import { ASSETS, MIDMAR_LOGO_B64 } from "./assets.js";
 
 const APP_VERSION = "2.4.0";
 const json = (data,status=200,headers={}) => new Response(JSON.stringify(data),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store",...headers}});
@@ -167,7 +167,7 @@ export default {
    }
    if(p==="/auth/google"&&method==="GET"){
     if(!env.GOOGLE_CLIENT_ID||!env.GOOGLE_CLIENT_SECRET)return Response.redirect(new URL("/?auth_error=not_configured",url),302);
-    const state=token(32),current=await authUser(request,env),link=url.searchParams.get("link")==="1"&&current?"google-link:"+current.id:null,requestedRole=url.searchParams.get("role")==="student"?"student":"teacher",oauthMode=link||"google:"+requestedRole;
+    const state=token(32),current=await authUser(request,env),link=url.searchParams.get("link")==="1"&&current?"google-link:"+current.id:null,requestedRole=url.searchParams.get("role"),oauthMode=link||(requestedRole==="student"?"google:student":requestedRole==="teacher"?"google:teacher":"google:login");
     await run(env,"INSERT INTO oauth_states(state,provider,created) VALUES(?,?,?)",state,oauthMode,now());
     const callback=env.GOOGLE_REDIRECT_URI||url.origin+"/auth/google/callback";
     const go=new URL("https://accounts.google.com/o/oauth2/v2/auth");
@@ -205,14 +205,15 @@ export default {
        await run(env,"UPDATE teachers SET provider='google',provider_sub=?,email_verified=1,display_name=CASE WHEN display_name='' THEN ? ELSE display_name END WHERE id=?",info.sub,String(info.name||""),byEmail.id);
        teacher=byEmail;
       }else{
-       const wantedRole=stateMode==="google:student"?"student":"teacher",name=String(info.name||email.split("@")[0]).slice(0,80);
+       if(stateMode==="google:login")throw Error("google_role_required");
+       const wantedRole=stateMode==="google:student"?"student":"teacher",name=String(info.name||payload.name||email.split("@")[0]).slice(0,80);
        const ins=await run(env,"INSERT INTO teachers(username,hash,email,provider,provider_sub,role,display_name,email_verified) VALUES(?,NULL,?,'google',?,?,?,1)","google:"+info.sub,email,info.sub,wantedRole,name);
        teacher={id:ins.meta.last_row_id,role:wantedRole,email};
       }
      }else await run(env,"UPDATE teachers SET email=?,email_verified=1,display_name=CASE WHEN display_name='' THEN ? ELSE display_name END WHERE id=?",email,String(info.name||""),teacher.id);
      const sid=token(32);await run(env,"INSERT INTO sessions(sid,teacher_id,created) VALUES(?,?,?)",sid,teacher.id,now());
      return new Response(null,{status:302,headers:{location:url.origin+"/", "set-cookie":cookieHeader(sid)}});
-    }catch(e){console.error("Google OAuth error",e.message);return Response.redirect(url.origin+"/?auth_error=google_failed",302);}
+    }catch(e){console.error("Google OAuth error",e.message);return Response.redirect(url.origin+"/?auth_error="+(e.message==="google_role_required"?"role_required":"google_failed"),302);}
    }
    if(p==="/api/logout"&&method==="POST"){
     const sid=cookie(request,"sid");if(sid)await run(env,"DELETE FROM sessions WHERE sid=?",sid);
@@ -437,10 +438,8 @@ export default {
    if(p==="/j/"+p.split("/").pop()&&/^\/j\//.test(p))return text(ASSETS["/play.html"],200,{"content-type":"text/html; charset=utf-8"});
    if(p==="/board/"+p.split("/").pop()&&/^\/board\//.test(p))return text(ASSETS["/board.html"],200,{"content-type":"text/html; charset=utf-8"});
    if(p==="/midmar-logo.webp"){
-    const logoUrl="https://raw.githubusercontent.com/ABOODY25009/Midmar/cloudflare-v2/public/midmar-logo.webp";
-    const cacheKey=new Request(logoUrl),cache=caches.default;let logo=await cache.match(cacheKey);
-    if(!logo){const upstream=await fetch(logoUrl);if(!upstream.ok)return fail("تعذر تحميل شعار مِضمار",502);logo=new Response(upstream.body,{headers:{"content-type":"image/webp","cache-control":"public, max-age=86400","x-content-type-options":"nosniff"}});ctx.waitUntil(cache.put(cacheKey,logo.clone()))}
-    return logo;
+    const bytes=Uint8Array.from(atob(MIDMAR_LOGO_B64),c=>c.charCodeAt(0));
+    return new Response(bytes,{headers:{"content-type":"image/webp","cache-control":"public, max-age=86400","x-content-type-options":"nosniff"}});
    }
    const asset=ASSETS[p];if(asset!==undefined){const type=p.endsWith(".js")?"text/javascript; charset=utf-8":p.endsWith(".css")?"text/css; charset=utf-8":p.endsWith(".svg")?"image/svg+xml":"text/html; charset=utf-8";return text(asset,200,{"content-type":type,"cache-control":p==="/admin.js"?"no-cache":"public, max-age=180"});}
    return fail("الصفحة غير موجودة",404);

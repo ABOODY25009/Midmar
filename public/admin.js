@@ -25,7 +25,7 @@ applyTheme(currentTheme,false);
 async function loginScreen(){
  let mode='login',role='student';
  const error=new URLSearchParams(location.search).get('auth_error');
- const authError=error==='not_configured'?'تسجيل Google غير مهيأ في إعدادات الخادم.':error==='google_failed'?'تعذر إكمال التحقق عبر Google. حاول مرة أخرى.':error==='invalid_state'?'انتهت صلاحية جلسة التحقق. أعد المحاولة.':'';
+ const authError=error==='not_configured'?'تسجيل Google غير مهيأ في إعدادات الخادم.':error==='google_failed'?'تعذر إكمال التحقق عبر Google. حاول مرة أخرى.':error==='invalid_state'?'انتهت صلاحية جلسة التحقق. أعد المحاولة.':error==='role_required'?'لم يتم العثور على حساب. اختر «إنشاء حساب» وحدد صفتك أولًا.':'';
  const draw=()=>{
   const registering=mode==='register';
   app.innerHTML=`<main class="center auth-shell"><section class="auth-panel card account-auth">
