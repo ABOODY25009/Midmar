@@ -25,15 +25,15 @@
 - قبل الانضمام، يتحقق Worker من جلسة الطالب ومن وجوده ضمن إحدى مجموعات الوصول المربوطة بالمسابقة.
 - يحصل الطالب على معرّف ثابت بالشكل `STD-000001`، وتُحفظ مشاركاته مرتبطة بمعرفه.
 
-## الذكاء الاصطناعي ومفتاح OpenAI
-مسار قراءة أوراق الأسئلة يستخدم OpenAI Chat Completions مع نموذج `gpt-4o-mini`.
+## الذكاء الاصطناعي ومفتاح Google Gemini
+مسار قراءة أوراق الأسئلة يستخدم Google Gemini API مع نموذج `gemini-2.5-flash` عبر `generateContent`، ويدعم تحليل الصور وإخراج JSON منظم.
 
-أضف مفتاحك في Cloudflare كـ Secret:
+أضف مفتاح Google AI Studio في Cloudflare كـ Secret:
 1. افتح Worker `midmar-v2-dev` من صفحة Workers & Pages.
 2. افتح Settings ثم Variables and Secrets.
 3. اضغط Add واختر Secret.
-4. الاسم: `OPENAI_API_KEY`.
-5. القيمة: مفتاح OpenAI الخاص بك.
+4. الاسم: `GEMINI_API_KEY`.
+5. القيمة: مفتاح Google AI Studio.
 6. اضغط Save and Deploy.
 
 لا تضع المفتاح في GitHub أو في كود الواجهة أو في `wrangler.jsonc`. يتحقق الموقع من حالة المفتاح عبر `GET /api/ai/status` ولا يعرض قيمته مطلقًا.
