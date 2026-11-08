@@ -37,11 +37,24 @@ const playerThemeButton=document.createElement('button');playerThemeButton.id='p
 
 async function api(u,m='GET',b){const r=await fetch(u,{method:m,headers:b?{'Content-Type':'application/json'}:{},body:b?JSON.stringify(b):undefined});const j=await r.json().catch(()=>({}));if(!r.ok){const e=Error(j.error||'حدث خطأ');e.data=j;throw e}return j}
 async function start(){if(token){try{S=await api('/api/play/'+token);off=S.now-Date.now();return game()}catch(e){localStorage.removeItem(KEY);token=null}}
- try{const i=await api('/api/join/'+code);intro(i)}catch(e){app.innerHTML=`<div class=center><div class="card narrow"><h2>تعذّر فتح المسابقة</h2><p>${esc(e.message)}</p></div></div>`}}
-function intro(i){const student=i.participation_mode==='students',roster=i.roster||[];app.innerHTML=`<div class=center><div class="card narrow player-join-card"><img class=player-brand src="/midmar-logo.webp" alt="شعار مِضمار"><h1>${esc(i.title)}</h1>${i.image?`<img src="${i.image}" alt="" style="max-width:100%;border-radius:10px">`:''}<p>${esc(i.description)}</p>
- <p class=tag>${i.nq} سؤال${i.time_limit?` · ${i.time_limit} دقيقة`:''}</p><p>${student?'مشاركة فردية – كل طالب يشارك من جهازه.':'مشاركة جماعية – جوال واحد لكل مجموعة.'}</p>
- ${i.status==='open'?`${student&&i.entry_mode!=='qr'&&roster.length?`<label for=roster>اختر اسمك من قائمة المعلم</label><select id=roster><option value="">اختيار الاسم</option>${roster.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('')}</select>`:''}${!student||i.entry_mode!=='roster'?`<label for=n>${student?'اسم الطالب':'اسم المجموعة'}</label><input id=n maxlength=40 autocomplete=off>`:''}<p class=err id=e></p><button class="btn p" id=go style="width:100%;justify-content:center">${student?'ابدأ المشاركة':'ابدئي المسابقة'}</button>`:`<p class=err>المسابقة ${esc(i.status)}</p>`}</div></div>`;
- const go=document.getElementById('go');if(go)go.onclick=async()=>{go.disabled=true;try{const payload={name:document.getElementById('n')?.value,roster_id:document.getElementById('roster')?.value};const r=await api('/api/join/'+code,'POST',payload);token=r.token;localStorage.setItem(KEY,token);S=await api('/api/play/'+token);off=S.now-Date.now();game()}catch(e){document.getElementById('e').textContent=e.message;go.disabled=false}}}
+ try{const i=await api('/api/join/'+code);intro(i)}catch(e){const login=e.message.includes('سجّل الدخول');app.innerHTML=`<div class=center><div class="card narrow player-join-card"><img class=player-brand src="/midmar-logo.webp" alt="مِضمار"><h2>تعذّر فتح المسابقة</h2><p>${esc(e.message)}</p>${login?'<a class="btn p" href="/">الانتقال إلى تسجيل الدخول</a>':''}</div></div>`}}
+function intro(i){
+ const student=i.participation_mode==='students';
+ app.innerHTML=`<div class=center><div class="card narrow player-join-card"><img class=player-brand src="/midmar-logo.webp" alt="شعار مِضمار"><h1>${esc(i.title)}</h1>${i.image?`<img src="${i.image}" alt="" style="max-width:100%;border-radius:10px">`:''}<p>${esc(i.description)}</p>
+ <p class=tag>${i.nq} سؤال${i.time_limit?` · ${i.time_limit} دقيقة`:''}</p>
+ <p>${student?'مشاركة فردية مرتبطة بحسابك المسجل.':'مشاركة جماعية – جوال واحد لكل مجموعة.'}</p>
+ ${student?`<div class="student-identity-box"><b>${esc(i.student_name||'حساب الطالب')}</b><small>معرّف الطالب: ${esc(i.student_id||'—')}</small><small>سيتم تسجيل مشاركتك باسم حسابك دون إدخال اسم يدوي.</small></div>`:'<label for=n>اسم المجموعة</label><input id=n maxlength=40 autocomplete=off placeholder="أدخل اسم المجموعة">'}
+ ${i.status==='open'?'<p class=err id=e></p><button class="btn p" id=go style="width:100%;justify-content:center">ابدأ المشاركة</button>':`<p class=err>المسابقة ${esc(i.status)}</p>`}</div></div>`;
+ const go=document.getElementById('go');
+ if(go)go.onclick=async()=>{
+  go.disabled=true;go.textContent='جارٍ تسجيل المشاركة...';
+  try{
+   const payload=student?{}:{name:document.getElementById('n')?.value};
+   const r=await api('/api/join/'+code,'POST',payload);
+   token=r.token;localStorage.setItem(KEY,token);S=await api('/api/play/'+token);off=S.now-Date.now();game();
+  }catch(err){document.getElementById('e').textContent=err.message;go.disabled=false;go.textContent='ابدأ المشاركة'}
+ };
+}
 function game(){clearInterval(timer);clearInterval(waitTimer);if(S.done)return end();if(S.waiting){app.innerHTML=`<div class=center><div class="card narrow" style="text-align:center"><h2>بانتظار المعلم</h2><p>أكملت السؤال المتاح. سيظهر السؤال التالي هنا عند فتحه من لوحة المعلم.</p><div class=tag>لا تغلق الصفحة</div></div></div>`;waitTimer=setInterval(async()=>{try{S=await api('/api/play/'+token);off=S.now-Date.now();if(!S.waiting)game()}catch(e){}},1500);return}sel=null;busy=false;const q=S.question;orderSel=q.type==='order'?q.options.map(x=>x.i).sort(()=>Math.random()-.5):[];
  app.innerHTML=`<div class=top><div class=row><img class=game-logo src="/midmar-logo.webp" alt="مِضمار"><b>${esc(S.title)}</b><span class=sp></span><span id=tm></span></div><div class=row><small>${esc(S.group)}</small><span class=sp></span><small>سؤال ${S.answered+1} من ${S.total}</small></div><div class=bar style="margin-top:.4em"><i style="width:${100*S.answered/S.total}%"></i></div></div>
  <div class=wrap style="max-width:640px"><h2 style="margin-top:.8em">${esc(q.text)}</h2>${q.image?`<img src="${q.image}" alt="" style="max-width:100%;border-radius:10px">`:''}<div id=ch>${q.type==='order'?orderSel.map((n,i)=>`<div class=choice style="display:flex;align-items:center;gap:.5em"><b>${i+1}.</b><span class=sp>${esc(q.options.find(x=>x.i===n).t)}</span><button class="btn s" data-move="up" data-pos=${i} ${i===0?'disabled':''}>↑</button><button class="btn s" data-move="down" data-pos=${i} ${i===orderSel.length-1?'disabled':''}>↓</button></div>`).join(''):` ${q.options.map(o=>`<button class=choice data-i=${o.i}>${esc(o.t)}</button>`).join('')}`}</div><div id=fb></div>
