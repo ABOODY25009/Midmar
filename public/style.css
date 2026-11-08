@@ -265,3 +265,44 @@ html[data-theme="light"] .board-page .theme-toggle{background:#fff;color:#1e459f
 @media(max-width:650px){.settings-card{grid-template-columns:40px minmax(0,1fr)}.theme-choices{flex-direction:column}.theme-choices .btn{width:100%}}
 
 .settings-hint{grid-column:1/-1}
+
+/* هوية مِضمار الرسمية — الإصدار الموسّع */
+.nav-brand-logo{display:block;width:58px;height:48px;object-fit:contain;flex:0 0 auto;filter:drop-shadow(0 2px 4px #0002)}
+.role-login-wrap{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2.5em 1.2em;gap:1.1em}
+.role-brand{display:flex;flex-direction:column;align-items:center;text-align:center;gap:.35em;margin-bottom:.5em}
+.role-brand img{width:min(300px,65vw);max-height:175px;object-fit:contain;filter:drop-shadow(0 10px 22px #1438751b)}
+.role-brand p,.role-subtitle{margin:0;color:var(--mut);text-align:center}
+.role-login-wrap>h1{text-align:center;margin:0}
+.role-login-grid{width:min(100%,920px);display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1em;margin-top:.65em}
+.role-login-card{display:flex;flex-direction:column;gap:.65em;padding:1.5em;min-height:320px}
+.role-login-card h2{margin:0;font-size:1.35rem}
+.role-login-card p{margin:0;line-height:1.85;flex:1}
+.role-login-card .btn{width:100%;justify-content:center}
+.role-login-card small{color:var(--mut)}
+.role-icon{width:52px;height:52px;display:grid;place-items:center;border-radius:16px;background:var(--soft-2);color:var(--g);font-size:1.6rem;font-weight:800}
+.student-login-card form{display:grid;gap:.4em}
+.student-login-card form label{margin:.35em 0 0}
+.role-login-footer{margin-top:.7em;color:var(--mut);font-size:.85em}
+.auth-error{width:min(100%,600px);text-align:center}
+.student-entry-wrap{min-height:100vh;display:grid;place-items:center;padding:1.25em}
+.student-entry-card{width:min(100%,460px);display:flex;flex-direction:column;align-items:stretch;gap:.6em;text-align:center;padding:1.6em}
+.student-entry-logo{width:min(220px,65%);max-height:125px;object-fit:contain;align-self:center}
+.student-entry-card h1{margin:.1em 0}
+.student-entry-card p{margin:.15em 0 .55em}
+.student-entry-card form{text-align:right;display:grid;gap:.45em}
+.student-entry-card form label{margin:0}
+.student-entry-card form button{width:100%;justify-content:center}
+.student-entry-card small{color:var(--mut);margin-top:.3em}
+.student-back{margin-top:.45em;font-size:.9em}
+.ai-sheet-card{margin-bottom:1em;background:var(--soft)}
+.ai-sheet-card h3{margin:0}
+.ai-sheet-card p{margin:.2em 0 .65em;color:var(--mut);font-size:.92em}
+.ai-sheet-card #readSheet{margin-top:.6em}
+.ai-status-pill{font-size:.78em;font-weight:700;border-radius:99px;background:var(--soft-2);color:var(--g);padding:.3em .7em}
+.ai-status-pill[data-enabled="false"]{background:color-mix(in srgb,var(--red) 13%,var(--card));color:var(--red)}
+.ai-sheet-card #readSheet:disabled{opacity:.6;cursor:wait}
+.board-brand-logo{width:58px;height:46px;object-fit:contain;flex:0 0 auto}
+.board-page .hd{display:flex;align-items:center;gap:1em}
+.player-entry-card{gap:.55em}
+.play-brand-logo{display:block;width:min(210px,65%);max-height:120px;object-fit:contain;margin:0 auto .4em}
+@media(max-width:700px){.role-login-grid{grid-template-columns:1fr}.role-login-card{min-height:0}.role-login-wrap{padding:1.4em .85em}.role-brand img{max-height:130px}.nav-brand-logo{width:48px;height:40px}.board-brand-logo{width:46px;height:38px}}
