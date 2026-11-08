@@ -1,6 +1,6 @@
 import { ASSETS, MIDMAR_LOGO_B64 } from "./assets.js";
 
-const APP_VERSION = "2.4.0";
+const APP_VERSION = "2.5.0";
 const json = (data,status=200,headers={}) => new Response(JSON.stringify(data),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store",...headers}});
 const text = (value,status=200,headers={}) => new Response(value,{status,headers});
 const now = () => Date.now();
@@ -177,8 +177,7 @@ export default {
    if(p==="/auth/google/callback"&&method==="GET"){
     const state=url.searchParams.get("state")||"",code=url.searchParams.get("code")||"";
     const saved=await first(env,"SELECT state,provider FROM oauth_states WHERE state=? AND created>?",state,now()-600000);
-    await run(env,"DELETE FROM oauth_states WHERE state=?",state);
-    if(!saved||!code)return Response.redirect(url.origin+"/?auth_error=invalid_state",302);
+    if(!saved||!code){await run(env,"DELETE FROM oauth_states WHERE state=?",state);return Response.redirect(url.origin+"/?auth_error=invalid_state",302);}
     try{
      const callback=env.GOOGLE_REDIRECT_URI||url.origin+"/auth/google/callback";
      const tokenRes=await fetch("https://oauth2.googleapis.com/token",{method:"POST",headers:{"content-type":"application/x-www-form-urlencoded"},body:new URLSearchParams({code,client_id:env.GOOGLE_CLIENT_ID,client_secret:env.GOOGLE_CLIENT_SECRET,redirect_uri:callback,grant_type:"authorization_code"})});
@@ -205,15 +204,40 @@ export default {
        await run(env,"UPDATE teachers SET provider='google',provider_sub=?,email_verified=1,display_name=CASE WHEN display_name='' THEN ? ELSE display_name END WHERE id=?",info.sub,String(info.name||""),byEmail.id);
        teacher=byEmail;
       }else{
-       if(stateMode==="google:login")throw Error("google_role_required");
+       if(stateMode==="google:login"){
+        const pending={email,sub:info.sub,name:String(info.name||payload.name||email.split("@")[0]).slice(0,80)};
+        await run(env,"UPDATE oauth_states SET provider=? WHERE state=?","pending:"+JSON.stringify(pending),state);
+        return new Response(null,{status:302,headers:{location:url.origin+"/?google_pending=1","set-cookie":"google_pending="+state+"; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=600"}});
+       }
        const wantedRole=stateMode==="google:student"?"student":"teacher",name=String(info.name||payload.name||email.split("@")[0]).slice(0,80);
        const ins=await run(env,"INSERT INTO teachers(username,hash,email,provider,provider_sub,role,display_name,email_verified) VALUES(?,NULL,?,'google',?,?,?,1)","google:"+info.sub,email,info.sub,wantedRole,name);
        teacher={id:ins.meta.last_row_id,role:wantedRole,email};
       }
      }else await run(env,"UPDATE teachers SET email=?,email_verified=1,display_name=CASE WHEN display_name='' THEN ? ELSE display_name END WHERE id=?",email,String(info.name||""),teacher.id);
+     await run(env,"DELETE FROM oauth_states WHERE state=?",state);
      const sid=token(32);await run(env,"INSERT INTO sessions(sid,teacher_id,created) VALUES(?,?,?)",sid,teacher.id,now());
      return new Response(null,{status:302,headers:{location:url.origin+"/", "set-cookie":cookieHeader(sid)}});
     }catch(e){console.error("Google OAuth error",e.message);return Response.redirect(url.origin+"/?auth_error="+(e.message==="google_role_required"?"role_required":"google_failed"),302);}
+   }
+   if(p==="/api/auth/google/pending"&&method==="GET"){
+    const pendingState=cookie(request,"google_pending");
+    if(!/^[a-f0-9]{64}$/.test(pendingState))return json({pending:false});
+    const row=await first(env,"SELECT provider,created FROM oauth_states WHERE state=? AND created>?",pendingState,now()-600000);
+    if(!row||!String(row.provider||"").startsWith("pending:"))return json({pending:false});
+    try{return json({pending:true,...JSON.parse(row.provider.slice(8))})}catch{return json({pending:false})}
+   }
+   if(p==="/api/auth/google/confirm"&&method==="POST"){
+    const pendingState=cookie(request,"google_pending"),b=await bodyOf(request),role=String(b.role||"");
+    if(!/^[a-f0-9]{64}$/.test(pendingState))return fail("انتهت جلسة التسجيل باستخدام Google. أعد المحاولة.",401);
+    if(!["teacher","student"].includes(role))return fail("اختر نوع الحساب: طالب أو معلم");
+    const row=await first(env,"SELECT provider,created FROM oauth_states WHERE state=? AND created>?",pendingState,now()-600000);
+    if(!row||!String(row.provider||"").startsWith("pending:"))return fail("انتهت جلسة التسجيل. أعد تسجيل الدخول باستخدام Google.",401);
+    let pending;try{pending=JSON.parse(row.provider.slice(8))}catch{return fail("تعذر قراءة بيانات Google.",400)}
+    if(await first(env,"SELECT id FROM teachers WHERE email=? OR (provider='google' AND provider_sub=?)",pending.email,pending.sub))return fail("يوجد حساب بهذا البريد بالفعل. سجّل الدخول من جديد.",409);
+    const ins=await run(env,"INSERT INTO teachers(username,hash,email,provider,provider_sub,role,display_name,email_verified) VALUES(?,NULL,?,'google',?,?,?,1)","google:"+pending.sub,pending.email,pending.sub,role,pending.name);
+    await run(env,"DELETE FROM oauth_states WHERE state=?",pendingState);
+    const sid=token(32);await run(env,"INSERT INTO sessions(sid,teacher_id,created) VALUES(?,?,?)",sid,ins.meta.last_row_id,now());
+    return json({ok:true,authenticated:true,role},200,{"set-cookie":cookieHeader(sid)+", google_pending=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0"});
    }
    if(p==="/api/logout"&&method==="POST"){
     const sid=cookie(request,"sid");if(sid)await run(env,"DELETE FROM sessions WHERE sid=?",sid);
@@ -230,6 +254,25 @@ export default {
    if(p==="/api/ai/status"&&method==="GET"){
     const u=await requireTeacher(request,env);if(!u)return fail("هذه الصفحة مخصصة للمعلم",403);
     return json({configured:!!env.GEMINI_API_KEY,verified:!!u.email_verified,provider:"Google Gemini",model:"gemini-2.5-flash"});
+   }
+   if(p==="/api/ai/generate"&&method==="POST"){
+    const u=await requireTeacher(request,env);if(!u)return fail("هذه العملية مخصصة للمعلم",403);
+    if(!u.email_verified)return fail("وثّق بريد حساب المعلم باستخدام Google أولًا قبل استخدام الذكاء الاصطناعي.",403);
+    if(!env.GEMINI_API_KEY)return fail("مفتاح Google Gemini غير مضاف إلى إعدادات Worker.",503);
+    const b=await bodyOf(request),topic=String(b.topic||"").trim().slice(0,500),grade=String(b.grade||"").trim().slice(0,100),count=Math.max(1,Math.min(20,Number(b.count)||5));
+    if(topic.length<3)return fail("اكتب موضوعًا واضحًا لإنشاء الأسئلة.");
+    const prompt="أنشئ "+count+" أسئلة تعليمية باللغة العربية حول: "+topic+". المرحلة الدراسية: "+(grade||"مناسبة للموضوع")+". أعد JSON فقط بالشكل {questions:[{type:mc,text:string,options:[string,string,string,string],correct:0,points:1}]}. نوّع بين mc وtf وorder عند ملاءمة ذلك. tf خياراتها [صح، خطأ] والإجابة الصحيحة 0 أو 1. order اكتب عناصرها في ترتيبها الصحيح، واترك correct:null. اجعل الأسئلة دقيقة وغير مكررة، والخيارات متوازنة، ولا تضع شرحًا خارج JSON.";
+    try{
+     const response=await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",{method:"POST",headers:{"x-goog-api-key":env.GEMINI_API_KEY,"content-type":"application/json"},body:JSON.stringify({contents:[{role:"user",parts:[{text:prompt}]}],generationConfig:{temperature:0.25,responseMimeType:"application/json",maxOutputTokens:4096}})});
+     const data=await response.json();
+     if(!response.ok){console.error("Gemini generation failed",response.status,data?.error?.status);return fail(response.status===401||response.status===403?"مفتاح Gemini غير صالح أو لا يملك صلاحية استخدام Gemini API.":"تعذر الاتصال بخدمة Google Gemini.",502)}
+     const raw=(data.candidates?.[0]?.content?.parts||[]).map(x=>x.text||"").join("").trim();
+     if(!raw)return fail("لم تُرجع خدمة Gemini أسئلة. جرّب موضوعًا أكثر تحديدًا.",502);
+     const parsed=JSON.parse(raw),items=Array.isArray(parsed.questions)?parsed.questions:[];
+     const questions=items.map(q=>{const t=String(q.type||"mc").toLowerCase(),type=["tf","true_false","truefalse"].includes(t)?"tf":["order","ordering","sequence"].includes(t)?"order":"mc",options=type==="tf"?["صح","خطأ"]:Array.isArray(q.options)?q.options.map(x=>String(x||"").trim()).filter(Boolean).slice(0,6):[];let correct=Number.isInteger(q.correct)?q.correct:null;if(type!=="order"&&(correct===null||correct<0||correct>=options.length))correct=null;return {type,text:String(q.text||"").trim(),options,correct,points:Math.max(1,Math.min(100,Number(q.points)||1))}}).filter(q=>q.text&&q.options.length>=2&&(q.type==="order"||q.correct!==null));
+     if(!questions.length)return fail("لم ينتج الذكاء الاصطناعي أسئلة صالحة. أعد المحاولة بموضوع آخر.",422);
+     return json({questions,model:"gemini-2.5-flash",provider:"Google Gemini",reviewRequired:true});
+    }catch(e){console.error("Gemini generation error",e?.message||e);return fail("تعذر إنشاء الأسئلة. حاول مرة أخرى بعد قليل.",502)}
    }
    if(p==="/api/ai/parse-sheet"&&method==="POST"){
     const u=await requireTeacher(request,env);if(!u)return fail("هذه العملية مخصصة للمعلم",403);
