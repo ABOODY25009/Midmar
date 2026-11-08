@@ -137,7 +137,31 @@ async function settings(M){
  $('#replayTour').onclick=showTour;
 }
 const toMs=v=>v?new Date(v).getTime():null,fromMs=v=>v?new Date(v-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,16):'';
-const readImg=f=>new Promise((res,rej)=>{if(!f)return res('');if(f.size>1.5e6)return rej(Error('الصورة كبيرة (الحد 1.5 ميغابايت)'));const r=new FileReader();r.onload=()=>res(r.result);r.readAsDataURL(f)});
+const readImg=f=>new Promise((res,rej)=>{
+ if(!f)return res('');
+ if(f.size>1.5e6)return rej(Error('الصورة كبيرة (الحد 1.5 ميغابايت)'));
+ const reader=new FileReader();
+ reader.onerror=()=>rej(Error('تعذرت قراءة الصورة.'));
+ reader.onload=()=>{
+  const image=new Image();
+  image.onerror=()=>rej(Error('صيغة الصورة غير مدعومة.'));
+  image.onload=()=>{
+   const scale=Math.min(1,1800/Math.max(image.naturalWidth,image.naturalHeight));
+   const canvas=document.createElement('canvas');
+   canvas.width=Math.max(1,Math.round(image.naturalWidth*scale));
+   canvas.height=Math.max(1,Math.round(image.naturalHeight*scale));
+   const ctx=canvas.getContext('2d');
+   if(!ctx)return rej(Error('تعذر تجهيز الصورة للتحليل.'));
+   ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);
+   ctx.drawImage(image,0,0,canvas.width,canvas.height);
+   const data=canvas.toDataURL('image/png');
+   if(data.length>2900000)return rej(Error('الصورة الناتجة كبيرة. قصّ الورقة أو صغّرها ثم أعد المحاولة.'));
+   res(data);
+  };
+  image.src=String(reader.result||'');
+ };
+ reader.readAsDataURL(f);
+});
 async function editor(M,id){
  const z=id?await api('/api/quizzes/'+id):{title:'',description:'',image:'',time_limit:0,shuffle_q:0,shuffle_a:0,show_correct:1,allow_retry:0,start_at:null,end_at:null,participation_mode:'groups',entry_mode:'both',progression_mode:'sequential',roster:'',questions:[],ng:0};
  const locked=id&&(await api('/api/quizzes')).find(x=>x.id==id).ng>0;let Q=z.questions.map(x=>({...x})),step=0;
