@@ -1,6 +1,7 @@
 import { ASSETS } from "./assets.js";
+import { LOGO_BASE64 } from "./brand.js";
 
-const APP_VERSION = "2.2.0";
+const APP_VERSION = "3.0.0";
 const json = (data,status=200,headers={}) => new Response(JSON.stringify(data),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store",...headers}});
 const text = (value,status=200,headers={}) => new Response(value,{status,headers});
 const now = () => Date.now();
@@ -95,6 +96,11 @@ export default {
  async fetch(request,env,ctx){
   const url=new URL(request.url),p=url.pathname,method=request.method;
   try{
+   if(p==="/midmar-logo.webp"){
+    const binary=atob(LOGO_BASE64),bytes=new Uint8Array(binary.length);
+    for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
+    return new Response(bytes,{headers:{"content-type":"image/webp","cache-control":"public, max-age=31536000, immutable"}});
+   }
    if(p==="/health")return json({ok:true,app:"midmar-v2",version:APP_VERSION,database:"connected",time:new Date().toISOString()});
    if(p==="/api/version")return json({version:APP_VERSION});
    if(p==="/api/me"){
@@ -149,19 +155,66 @@ export default {
     const u=await requireUser(request,env);if(!u)return fail("يلزم تسجيل الدخول بحساب Google",401);
     await run(env,"UPDATE teachers SET onboarding_version=2 WHERE id=?",u.id);return json({ok:true,version:2});
    }
+   if(p==="/api/ai/status"&&method==="GET"){
+    const u=await requireUser(request,env);if(!u)return fail("يلزم تسجيل الدخول",401);
+    const provider=env.AI?"cloudflare-workers-ai":env.OPENAI_API_KEY?"openai":"none";
+    return json({enabled:provider!=="none",provider,model:provider==="cloudflare-workers-ai"?"@cf/qwen/qwen3.8-27b":provider==="openai"?"gpt-4o-mini":null});
+   }
    if(p==="/api/ai/parse-sheet"&&method==="POST"){
     const u=await requireUser(request,env);if(!u)return fail("يلزم تسجيل الدخول",401);
-    if(!env.OPENAI_API_KEY)return fail("قراءة الصور غير مفعّلة؛ يلزم ربط مفتاح OpenAI في إعدادات Worker.",503);
     const b=await bodyOf(request),image=String(b.image||"");
-    if(!/^data:image\/(png|jpeg|webp);base64,/.test(image)||image.length>3000000)return fail("الصورة غير صالحة أو حجمها كبير.");
-    const r=await fetch("https://api.openai.com/v1/chat/completions",{method:"POST",headers:{authorization:"Bearer "+env.OPENAI_API_KEY,"content-type":"application/json"},body:JSON.stringify({model:"gpt-4o-mini",response_format:{type:"json_object"},messages:[{role:"system",content:'اقرأ ورقة الأسئلة وأعد JSON فقط: {"questions":[{"type":"mc","text":"...","options":["...","..."],"correct":0,"points":1}]}. لا تخترع محتوى. استخدم correct:null إذا لم تظهر الإجابة.'},{role:"user",content:[{type:"text",text:"استخرج الأسئلة كما هي من الورقة، مع الخيارات والإجابات الصحيحة الظاهرة فقط."},{type:"image_url",image_url:{url:image,detail:"high"}}]}]})});
-    const data=await r.json();if(!r.ok)return fail(data.error?.message||"تعذر تحليل الصورة",502);
-    const obj=JSON.parse(data.choices?.[0]?.message?.content||"{}");
-    const qs=(obj.questions||[]).filter(x=>x.text&&Array.isArray(x.options)&&x.options.length>=2).map(x=>({type:x.type==="tf"?"tf":"mc",text:String(x.text),options:x.type==="tf"?["صح","خطأ"]:x.options.map(String).slice(0,6),correct:Number.isInteger(x.correct)?x.correct:null,points:Math.max(1,Number(x.points)||1)}));
-    return qs.length?json({questions:qs}):fail("لم يتم العثور على أسئلة واضحة",502);
+    if(!/^data:image\/(png|jpeg|webp);base64,/.test(image)||image.length>3000000)return fail("الصورة غير صالحة أو حجمها كبير (الحد 3 ميغابايت).");
+    if(!env.AI&&!env.OPENAI_API_KEY)return fail("خدمة الذكاء الاصطناعي غير مفعّلة على الخادم.",503);
+    const systemPrompt='استخرج الأسئلة من صورة ورقة الاختبار. أعد كائن JSON فقط بهذا الشكل: {"questions":[{"type":"mc","text":"نص السؤال","options":["الخيار الأول","الخيار الثاني"],"correct":0,"points":1}]}. استخدم type="tf" لأسئلة صح أو خطأ. لا تخترع سؤالًا أو خيارًا أو إجابة. إذا كانت الإجابة الصحيحة غير ظاهرة بوضوح استخدم correct:null. لا تستنتج الإجابة من معلوماتك؛ اقرأ ما يظهر في الورقة فقط. حافظ على اللغة العربية والنص الأصلي، ولا تضف شرحًا خارج JSON.';
+    const userPrompt="اقرأ الصورة كاملة واستخرج الأسئلة والخيارات كما تظهر. لا تضف أسئلة غير موجودة. أعد correct كرقم يبدأ من صفر إذا كانت الإجابة الصحيحة محددة بوضوح، وإلا null.";
+    let rawContent="";
+    try{
+     if(env.AI){
+      const result=await env.AI.run("@cf/qwen/qwen3.8-27b",{
+       messages:[
+        {role:"system",content:systemPrompt},
+        {role:"user",content:[{type:"text",text:userPrompt},{type:"image_url",image_url:{url:image}}]}
+       ],
+       response_format:{type:"json_object"},
+       reasoning_effort:"low",
+       max_completion_tokens:1800,
+       temperature:0.1
+      });
+      rawContent=result?.choices?.[0]?.message?.content??result?.response??"";
+     }else{
+      const result=await fetch("https://api.openai.com/v1/chat/completions",{
+       method:"POST",
+       headers:{authorization:"Bearer "+env.OPENAI_API_KEY,"content-type":"application/json"},
+       body:JSON.stringify({model:"gpt-4o-mini",response_format:{type:"json_object"},messages:[
+        {role:"system",content:systemPrompt},
+        {role:"user",content:[{type:"text",text:userPrompt},{type:"image_url",image_url:{url:image,detail:"high"}}]}
+       ]})
+      });
+      const data=await result.json();
+      if(!result.ok)return fail(data.error?.message||"تعذر تحليل الصورة",502);
+      rawContent=data.choices?.[0]?.message?.content||"";
+     }
+     if(rawContent&&typeof rawContent==="object")rawContent=JSON.stringify(rawContent);
+     const clean=String(rawContent).replace(/```(?:json)?/gi,"").replace(/```/g,"").trim();
+     const parsed=JSON.parse(clean);
+     const questions=(Array.isArray(parsed.questions)?parsed.questions:[])
+      .filter(x=>x&&typeof x.text==="string"&&x.text.trim()&&Array.isArray(x.options))
+      .map(x=>{
+       const type=x.type==="tf"?"tf":"mc";
+       const options=type==="tf"?["صح","خطأ"]:x.options.map(v=>String(v).trim()).filter(Boolean).slice(0,6);
+       const correct=Number.isInteger(x.correct)&&x.correct>=0&&x.correct<options.length?x.correct:null;
+       return {type,text:String(x.text).trim(),options,correct,points:Math.max(1,Math.min(100,Number(x.points)||1))};
+      })
+      .filter(x=>x.options.length>=2);
+     if(!questions.length)return fail("لم يتم العثور على أسئلة واضحة في الصورة. جرّب صورة أوضح.",422);
+     return json({questions,provider:env.AI?"cloudflare-workers-ai":"openai"});
+    }catch(e){
+     console.error("AI sheet parsing failed:",e?.message||e);
+     return fail("تعذر تحليل الورقة. تأكد من وضوح الصورة ثم حاول مرة أخرى.",502);
+    }
    }
 
-   const quizPath=p.match(/^\/api\/quizzes\/(\d+)(?:\/(copy|archive|board|results|export\.csv|unlock))?$/);
+      const quizPath=p.match(/^\/api\/quizzes\/(\d+)(?:\/(copy|archive|board|results|export\.csv|unlock))?$/);
    if(p==="/api/quizzes"&&method==="GET"){
     const u=await requireUser(request,env);if(!u)return fail("يلزم تسجيل الدخول بحساب Google",401);
     const rows=await all(env,"SELECT z.*,(SELECT COUNT(*) FROM questions WHERE quiz_id=z.id) nq,(SELECT COUNT(*) FROM groups WHERE quiz_id=z.id) ng FROM quizzes z WHERE teacher_id=? ORDER BY id DESC",u.id);return json(rows);
