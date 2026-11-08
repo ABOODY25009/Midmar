@@ -24,9 +24,21 @@ applyTheme(currentTheme,false);
 
 async function loginScreen(){
  const error=new URLSearchParams(location.search).get('auth_error');
- const message=error==='not_configured'?'تسجيل Google غير مهيأ في إعدادات الخادم.':error?'تعذر تسجيل الدخول عبر Google. حاول مرة أخرى.':'';
- app.innerHTML=`<main class="center"><section class="card narrow login-card"><h1>مِضمار</h1><p>سجّل الدخول بحساب Google لعرض مسابقاتك وأعمالك الخاصة.</p>${message?`<p class="err">${esc(message)}</p>`:''}<a class="btn p google-login" href="/auth/google"><span aria-hidden="true">G</span> تسجيل الدخول باستخدام Google</a><small>كل حساب له مساحة خاصة لا يطلع عليها الآخرون.</small></section></main>`;
+ const message=error==='not_configured'?'تسجيل Google غير مهيأ في إعدادات الخادم.':error==='google_failed'?'تعذر التحقق من حساب Google. حاول مرة أخرى.':error?'تعذر إكمال تسجيل الدخول. حاول مرة أخرى.':'';
+ app.innerHTML='<main class="center auth-shell"><section class="auth-panel card"><img class="auth-logo" src="/midmar-logo.webp" alt="شعار مِضمار"><span class="auth-kicker">منصة المسابقات التفاعلية</span><h1>مرحبًا بك في مِضمار</h1><p class="auth-intro">اختر نوع الدخول للمتابعة</p><div class="role-grid"><article class="role-card teacher-role"><div class="role-icon">♙</div><h2>دخول المعلم</h2><p>أنشئ المسابقات، أدر الأسئلة، وتابع نتائج الطلاب.</p>'+ (message?'<p class="err auth-error">'+esc(message)+'</p>':'') +'<a class="btn p role-action" href="/auth/google"><span class="google-g" aria-hidden="true">G</span> المتابعة باستخدام Google</a><small>الدخول مخصص لحسابات المعلمين.</small></article><article class="role-card student-role"><div class="role-icon">▣</div><h2>دخول الطالب</h2><p>أدخل رمز المسابقة الذي عرضه المعلم للانضمام.</p><label for="studentContestCode">رمز المسابقة</label><input id="studentContestCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="مثال: 482615" aria-describedby="studentLoginError"><p class="err auth-error" id="studentLoginError" aria-live="polite"></p><button class="btn p role-action" id="studentEnter" type="button">دخول المسابقة</button><small>لا يحتاج الطالب إلى حساب Google.</small></article></div><small class="auth-footer">باستخدامك مِضمار، أنت تنضم إلى مساحة تعليمية تفاعلية.</small></section></main>';
+ const codeInput=$('#studentContestCode'),errorBox=$('#studentLoginError'),enter=$('#studentEnter');
+ codeInput.addEventListener('input',()=>{codeInput.value=codeInput.value.replace(/\D/g,'').slice(0,6);errorBox.textContent=''});
+ const enterStudent=async()=>{
+  const code=codeInput.value.trim();
+  if(!/^\d{6}$/.test(code)){errorBox.textContent='أدخل رمزًا مكوّنًا من 6 أرقام.';codeInput.focus();return}
+  enter.disabled=true;enter.textContent='جارٍ التحقق...';
+  try{const info=await api('/api/join/'+code);if(info.status!=='open'){errorBox.textContent='المسابقة '+(info.status||'غير متاحة')+'. تواصل مع المعلم.';return}location.href='/j/'+code}
+  catch(err){errorBox.textContent=err.message||'تعذر العثور على المسابقة بهذا الرمز.'}
+  finally{enter.disabled=false;enter.textContent='دخول المسابقة'}
+ };
+ enter.onclick=enterStudent;codeInput.addEventListener('keydown',e=>{if(e.key==='Enter')enterStudent()});
 }
+
 let onboardingState=null;
 const tourSteps=[
  {title:'الرئيسية',text:'هنا تتابع عدد مسابقاتك والمجموعات المشاركة ومتوسط الدرجات وأعلى نتيجة.'},
@@ -59,7 +71,7 @@ async function render(){
  me=await fetch('/api/me').then(r=>r.json()).catch(()=>({authenticated:false}));
  if(!me.authenticated){await loginScreen();return}
  const h=location.hash.slice(1)||'/';const m=h.match(/^\/quiz\/(new|\d+)\/?(edit|results)?$/);
- app.innerHTML=`<nav class=nav><div class=wrap><div class=nav-brand><span class=nav-emblem>م</span><div><strong>مِضمار</strong><small>منصة المسابقات التفاعلية</small></div></div><a href="#/" data-p="/">الرئيسية</a><a href="#/quizzes" data-p="/quizzes">المسابقات</a><a href="#/settings" data-p="/settings">الإعدادات</a><a class=nav-create href="#/quiz/new" data-p="/quiz/new">+ إنشاء مسابقة</a><div class=nav-account><span class=nav-avatar>م</span><small>${esc(me.email||"حساب المعلم")}</small></div><span class=sp></span><button class="btn theme-toggle" id="themeToggle" type="button"></button><button class="btn nav-logout" id="logoutBtn" type="button">تسجيل الخروج</button><button class="brand-mark" id="brandOpen" type="button" aria-label="عرض بطاقة التطوير" aria-haspopup="dialog" aria-controls="brandDialog"><span aria-hidden="true">©</span></button><dialog class="brand-dialog" id="brandDialog" aria-labelledby="brandTitle"><div class="brand-card"><img src="/entrit-logo.svg" alt="شعار أنتريت"><div class="brand-copy"><strong id="brandTitle">تطوير أنتريت</strong><span>تم تطوير مِضمار بواسطة أنتريت</span><small id="brandVersion">إصدار الموقع 1.0.0</small></div></div><button class="btn brand-close" id="brandClose" type="button">إغلاق</button></dialog></div></nav><main class=wrap id=main></main>`;
+ app.innerHTML=`<nav class=nav><div class=wrap><div class=nav-brand><img class=nav-logo src="/midmar-logo.webp" alt="شعار مِضمار"></div><a href="#/" data-p="/">الرئيسية</a><a href="#/quizzes" data-p="/quizzes">المسابقات</a><a href="#/settings" data-p="/settings">الإعدادات</a><a class=nav-create href="#/quiz/new" data-p="/quiz/new">+ إنشاء مسابقة</a><div class=nav-account><span class=nav-avatar>م</span><small>${esc(me.email||"حساب المعلم")}</small></div><span class=sp></span><button class="btn theme-toggle" id="themeToggle" type="button"></button><button class="btn nav-logout" id="logoutBtn" type="button">تسجيل الخروج</button><button class="brand-mark" id="brandOpen" type="button" aria-label="عرض بطاقة التطوير" aria-haspopup="dialog" aria-controls="brandDialog"><span aria-hidden="true">©</span></button><dialog class="brand-dialog" id="brandDialog" aria-labelledby="brandTitle"><div class="brand-card"><img src="/entrit-logo.svg" alt="شعار أنتريت"><div class="brand-copy"><strong id="brandTitle">تطوير أنتريت</strong><span>تم تطوير مِضمار بواسطة أنتريت</span><small id="brandVersion">إصدار الموقع 1.0.0</small></div></div><button class="btn brand-close" id="brandClose" type="button">إغلاق</button></dialog></div></nav><main class=wrap id=main></main>`;
  applyTheme(currentTheme,false);
  $('#themeToggle').onclick=toggleTheme;
  fetch('/api/version').then(r=>r.json()).then(v=>{const el=$('#brandVersion');if(el)el.textContent='إصدار الموقع '+v.version}).catch(()=>{});

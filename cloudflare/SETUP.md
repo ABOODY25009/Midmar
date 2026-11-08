@@ -1,32 +1,32 @@
-# إعداد نسخة مِضمار على Cloudflare
+# إعداد نسخة مِضمار الموسعة على Cloudflare
 
-## إعداد Wrangler
-ملف `wrangler.jsonc` موجود في جذر المشروع ويحتوي مسبقًا على:
-- اسم Worker: `midmar-v2-dev`
-- نقطة الدخول: `cloudflare/worker.js`
-- ربط قاعدة D1: `midmar-dev`
-- متغير `GOOGLE_REDIRECT_URI` كقيمة نصية عادية ضمن `vars`.
+## الموارد
+- Worker: `midmar-v2-dev`
+- قاعدة D1: `midmar-dev`
+- Workers AI binding: `AI`
+- Google OAuth: Client ID وClient Secret محفوظان كـ Secrets.
 
-لا حاجة لإضافة `GOOGLE_REDIRECT_URI` مرة أخرى من لوحة Cloudflare إذا كنت تنشر باستخدام هذا الملف؛ يجب الحفاظ على نفس القيمة في الإعدادين.
+## Wrangler
+ملف `wrangler.jsonc` يعرّف Workers AI باسم `AI`، وقاعدة D1 باسم `DB`. حافظ على الربطين في كل نشر مستقبلي.
 
-## إعداد تسجيل الدخول Google
-في Cloudflare Dashboard افتح Worker `midmar-v2-dev` ثم Settings > Variables and Secrets، وأضف الأسرار التالية:
-- `GOOGLE_CLIENT_ID` — Secret
-- `GOOGLE_CLIENT_SECRET` — Secret
+## تسجيل الدخول
+- **المعلم:** تسجيل الدخول باستخدام Google.
+- **الطالب:** يختار دخول الطالب ويدخل رمز المسابقة ذي 6 أرقام. لا يحتاج الطالب إلى حساب Google.
 
-لا تضع هذه القيم في `wrangler.jsonc` أو GitHub.
+## قراءة ورقة الأسئلة بالذكاء الاصطناعي
+- تتم المعالجة عبر Cloudflare Workers AI بالنموذج `@cf/moondream/moondream3.1-9B-A2B`.
+- لا يحتاج هذا المسار إلى `OPENAI_API_KEY`.
+- يقبل PNG وJPG وWEBP.
+- يجب مراجعة الأسئلة والإجابات المستخرجة قبل حفظها، خصوصًا الأسئلة التي لا تظهر إجابتها بوضوح.
+- الخدمة تخضع لحدود Workers AI وتسعير الاستخدام في حساب Cloudflare.
 
-## إعداد Google Cloud Console
-في OAuth 2.0 Client من نوع Web application، أضف هذا الرابط ضمن Authorized redirect URIs:
+## Google OAuth
+الأسرار التالية تبقى في Cloudflare Variables and Secrets ولا ترفع إلى GitHub:
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
 
+رابط إعادة التوجيه:
 `https://midmar-v2-dev.midmar-v2-dev.workers.dev/auth/google/callback`
 
-## إعدادات اختيارية
-- `GOOGLE_OWNER_EMAIL` — اختياري، لربط هوية مالك مع سجل موجود في D1.
-- `OPENAI_API_KEY` — اختياري لتفعيل قراءة أوراق الأسئلة بالذكاء الاصطناعي.
-
-## قاعدة البيانات
-- قاعدة D1: `midmar-dev`.
-- معرفها مضبوط في `wrangler.jsonc`.
-- مجلد الترحيلات: `cloudflare/migrations`.
-- لا تشغّل ترحيلات على قاعدة أخرى؛ هذه النسخة مستقلة عن Render.
+## الشعار
+الشعار الرسمي موجود في `public/midmar-logo.webp` ويقدمه Worker من المسار `/midmar-logo.webp`.

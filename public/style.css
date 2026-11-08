@@ -265,3 +265,43 @@ html[data-theme="light"] .board-page .theme-toggle{background:#fff;color:#1e459f
 @media(max-width:650px){.settings-card{grid-template-columns:40px minmax(0,1fr)}.theme-choices{flex-direction:column}.theme-choices .btn{width:100%}}
 
 .settings-hint{grid-column:1/-1}
+
+/* الهوية الرسمية وشاشة اختيار نوع الدخول */
+.nav-logo{display:block;width:112px;height:76px;max-height:52px;object-fit:contain;object-position:center;flex:0 0 auto;filter:drop-shadow(0 2px 5px #071b4b20)}
+.nav-brand{min-width:0;margin-inline-end:.6em}
+.auth-shell{padding:2rem 1rem;background:radial-gradient(ellipse at 50% 5%,color-mix(in srgb,var(--g) 12%,transparent),transparent 50%)}
+.auth-panel{width:min(100%,840px);padding:clamp(1.2rem,4vw,2.4rem);border-radius:28px;text-align:center;background:var(--card);box-shadow:var(--shadow)}
+.auth-logo{display:block;width:min(210px,62vw);height:auto;max-height:142px;object-fit:contain;margin:0 auto .7rem}
+.auth-kicker{display:block;color:var(--g);font-size:.86rem;font-weight:800}
+.auth-panel>h1{margin:.25rem 0 .35rem}
+.auth-intro{margin:.1rem 0 1.3rem}
+.role-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;text-align:right}
+.role-card{display:flex;flex-direction:column;align-items:stretch;min-width:0;padding:1.25rem;border:1px solid var(--line);border-radius:20px;background:var(--bg)}
+.teacher-role{border-top:4px solid var(--g)}
+.student-role{border-top:4px solid var(--gold)}
+.role-icon{display:grid;place-items:center;width:44px;height:44px;margin-bottom:.5rem;border-radius:14px;background:var(--soft-2);color:var(--g);font-size:1.45rem;font-weight:800}
+.student-role .role-icon{background:color-mix(in srgb,var(--gold) 17%,var(--card));color:var(--ink)}
+.role-card h2{margin:.15rem 0}
+.role-card>p{margin:.2rem 0 .8rem;line-height:1.7}
+.role-card label{margin:.5rem 0 .25rem}
+.role-card input{background:var(--card);text-align:center;letter-spacing:.22em;font-size:1.2rem;font-weight:800;font-variant-numeric:tabular-nums}
+.role-action{display:flex;width:100%;justify-content:center;min-height:48px;margin:.3rem 0 .55rem}
+.role-card>small{margin-top:auto;padding-top:.5rem;color:var(--mut);font-size:.79rem}
+.google-g{display:inline-grid;place-items:center;width:23px;height:23px;border-radius:50%;background:#fff;color:#4285f4;font:bold 16px Arial}
+.auth-error{min-height:0;margin:.25rem 0!important;font-size:.85rem}
+.auth-footer{display:block;margin-top:1.2rem;color:var(--mut)}
+.player-brand{display:block;width:min(170px,58%);height:auto;max-height:115px;object-fit:contain;margin:0 auto 1rem}
+.player-join-card h1{text-align:center}
+.game-logo{width:78px;height:52px;object-fit:contain;flex:0 0 auto}
+.board-logo{width:106px;height:72px;object-fit:contain;flex:0 0 auto;filter:drop-shadow(0 2px 5px #061b4b22)}
+.board-page .hd{gap:.85em}
+@media(max-width:650px){
+ .nav-logo{width:86px;max-height:46px}
+ .role-grid{grid-template-columns:1fr}
+ .auth-panel{padding:1.1rem;border-radius:21px}
+ .role-card{padding:1rem}
+ .board-logo{width:78px;height:54px}
+ .board-page .hd h1{font-size:1.2rem}
+ .game-logo{width:66px;height:44px}
+}
+html[data-theme="dark"] .role-card{background:var(--bg);border-color:var(--line)}

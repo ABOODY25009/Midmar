@@ -1,6 +1,6 @@
 import { ASSETS } from "./assets.js";
 
-const APP_VERSION = "2.2.0";
+const APP_VERSION = "2.3.0";
 const json = (data,status=200,headers={}) => new Response(JSON.stringify(data),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store",...headers}});
 const text = (value,status=200,headers={}) => new Response(value,{status,headers});
 const now = () => Date.now();
@@ -150,15 +150,30 @@ export default {
     await run(env,"UPDATE teachers SET onboarding_version=2 WHERE id=?",u.id);return json({ok:true,version:2});
    }
    if(p==="/api/ai/parse-sheet"&&method==="POST"){
-    const u=await requireUser(request,env);if(!u)return fail("يلزم تسجيل الدخول",401);
-    if(!env.OPENAI_API_KEY)return fail("قراءة الصور غير مفعّلة؛ يلزم ربط مفتاح OpenAI في إعدادات Worker.",503);
+    const u=await requireUser(request,env);if(!u)return fail("يلزم تسجيل الدخول بحساب المعلم",401);
+    if(!env.AI||typeof env.AI.run!=="function")return fail("خدمة الذكاء الاصطناعي غير مربوطة في Worker. راجع إعداد AI في Wrangler.",503);
     const b=await bodyOf(request),image=String(b.image||"");
-    if(!/^data:image\/(png|jpeg|webp);base64,/.test(image)||image.length>3000000)return fail("الصورة غير صالحة أو حجمها كبير.");
-    const r=await fetch("https://api.openai.com/v1/chat/completions",{method:"POST",headers:{authorization:"Bearer "+env.OPENAI_API_KEY,"content-type":"application/json"},body:JSON.stringify({model:"gpt-4o-mini",response_format:{type:"json_object"},messages:[{role:"system",content:'اقرأ ورقة الأسئلة وأعد JSON فقط: {"questions":[{"type":"mc","text":"...","options":["...","..."],"correct":0,"points":1}]}. لا تخترع محتوى. استخدم correct:null إذا لم تظهر الإجابة.'},{role:"user",content:[{type:"text",text:"استخرج الأسئلة كما هي من الورقة، مع الخيارات والإجابات الصحيحة الظاهرة فقط."},{type:"image_url",image_url:{url:image,detail:"high"}}]}]})});
-    const data=await r.json();if(!r.ok)return fail(data.error?.message||"تعذر تحليل الصورة",502);
-    const obj=JSON.parse(data.choices?.[0]?.message?.content||"{}");
-    const qs=(obj.questions||[]).filter(x=>x.text&&Array.isArray(x.options)&&x.options.length>=2).map(x=>({type:x.type==="tf"?"tf":"mc",text:String(x.text),options:x.type==="tf"?["صح","خطأ"]:x.options.map(String).slice(0,6),correct:Number.isInteger(x.correct)?x.correct:null,points:Math.max(1,Number(x.points)||1)}));
-    return qs.length?json({questions:qs}):fail("لم يتم العثور على أسئلة واضحة",502);
+    if(!/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(image)||image.length>3000000)return fail("الصورة غير صالحة أو حجمها كبير. استخدم PNG أو JPG أو WEBP بحجم مناسب.",400);
+    try{
+     const prompt='اقرأ ورقة الأسئلة في الصورة واستخرج الأسئلة الظاهرة فقط. أعد JSON صالحًا فقط دون Markdown أو شرح، بهذا الشكل: {"questions":[{"type":"mc","text":"نص السؤال","options":["الخيار الأول","الخيار الثاني"],"correct":0,"points":1}]}. القواعد: استخدم mc للاختيار المتعدد، tf للصواب والخطأ، order لترتيب العناصر. في tf اجعل options ["صح","خطأ"]. لا تخترع أي سؤال أو خيار أو إجابة. إذا لم تكن الإجابة الصحيحة واضحة من الورقة فاجعل correct:null. في order ضع العناصر بالترتيب الصحيح فقط إذا كان ترتيبها ظاهرًا بوضوح. حافظ على النص كما يظهر وباللغة الأصلية.';
+     const result=await env.AI.run("@cf/moondream/moondream3.1-9B-A2B",{task:"query",image,question:prompt,reasoning:false,temperature:0.1,max_tokens:5000});
+     let output=typeof result==="string"?result:String(result?.answer||result?.description||result?.response||"");
+     if(!output.trim())throw Error("لم يُرجع نموذج الذكاء الاصطناعي نصًا يمكن قراءته.");
+     output=output.replace(/\x60{3}(?:json)?/gi,"").trim();
+     const firstBrace=output.indexOf("{"),lastBrace=output.lastIndexOf("}");
+     if(firstBrace<0||lastBrace<=firstBrace)throw Error("لم أستطع قراءة نتيجة التحليل. جرّب صورة أوضح ومباشرة.");
+     const parsed=JSON.parse(output.slice(firstBrace,lastBrace+1)),raw=Array.isArray(parsed.questions)?parsed.questions:[];
+     const questions=raw.map(q=>{
+      const t=String(q.type||"mc").toLowerCase(),type=["tf","true_false","truefalse"].includes(t)?"tf":["order","ordering","sequence"].includes(t)?"order":"mc";
+      const options=type==="tf"?["صح","خطأ"]:Array.isArray(q.options)?q.options.map(v=>String(v||"").trim()).filter(Boolean).slice(0,6):[];
+      let correct=Number.isInteger(q.correct)?q.correct:null;
+      if(type!=="tf"&&(correct===null||correct<0||correct>=options.length))correct=null;
+      if(type==="tf"&&(correct===null||correct<0||correct>1))correct=null;
+      return {type,text:String(q.text||"").trim(),options,correct,points:Math.max(1,Math.min(100,Number(q.points)||1))};
+     }).filter(q=>q.text&&q.options.length>=2);
+     if(!questions.length)throw Error("لم يتم العثور على أسئلة واضحة. استخدم صورة مستقيمة وواضحة.");
+     return json({questions,model:"moondream3.1",reviewRequired:true});
+    }catch(err){console.error("Question sheet AI failed:",err?.message||err);return fail(err?.message||"تعذر تحليل الورقة. حاول بصورة أوضح.",502)}
    }
 
    const quizPath=p.match(/^\/api\/quizzes\/(\d+)(?:\/(copy|archive|board|results|export\.csv|unlock))?$/);
@@ -278,6 +293,12 @@ export default {
    }
    if(p==="/j/"+p.split("/").pop()&&/^\/j\//.test(p))return text(ASSETS["/play.html"],200,{"content-type":"text/html; charset=utf-8"});
    if(p==="/board/"+p.split("/").pop()&&/^\/board\//.test(p))return text(ASSETS["/board.html"],200,{"content-type":"text/html; charset=utf-8"});
+   if(p==="/midmar-logo.webp"){
+    const logoUrl="https://raw.githubusercontent.com/ABOODY25009/Midmar/cloudflare-v2/public/midmar-logo.webp";
+    const cacheKey=new Request(logoUrl),cache=caches.default;let logo=await cache.match(cacheKey);
+    if(!logo){const upstream=await fetch(logoUrl);if(!upstream.ok)return fail("تعذر تحميل شعار مِضمار",502);logo=new Response(upstream.body,{headers:{"content-type":"image/webp","cache-control":"public, max-age=86400","x-content-type-options":"nosniff"}});ctx.waitUntil(cache.put(cacheKey,logo.clone()))}
+    return logo;
+   }
    const asset=ASSETS[p];if(asset!==undefined){const type=p.endsWith(".js")?"text/javascript; charset=utf-8":p.endsWith(".css")?"text/css; charset=utf-8":p.endsWith(".svg")?"image/svg+xml":"text/html; charset=utf-8";return text(asset,200,{"content-type":type,"cache-control":p==="/admin.js"?"no-cache":"public, max-age=180"});}
    return fail("الصفحة غير موجودة",404);
   }catch(e){console.error("Worker error",e?.stack||e);return fail("حدث خطأ داخلي في مِضمار",500);}

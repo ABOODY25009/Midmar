@@ -5,6 +5,9 @@
   "vars": {
     "GOOGLE_REDIRECT_URI": "https://midmar-v2-dev.midmar-v2-dev.workers.dev/auth/google/callback"
   },
+  "ai": {
+    "binding": "AI"
+  },
   "d1_databases": [
     {
       "binding": "DB",
