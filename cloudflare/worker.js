@@ -1,6 +1,6 @@
 import { ASSETS, MIDMAR_LOGO_B64 } from "./assets.js";
 
-const APP_VERSION = "2.4.1";
+const APP_VERSION = "2.4.0";
 const json = (data,status=200,headers={}) => new Response(JSON.stringify(data),{status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store",...headers}});
 const text = (value,status=200,headers={}) => new Response(value,{status,headers});
 const now = () => Date.now();
@@ -235,15 +235,16 @@ export default {
     const u=await requireTeacher(request,env);if(!u)return fail("هذه العملية مخصصة للمعلم",403);
     if(!u.email_verified)return fail("وثّق بريد حساب المعلم باستخدام Google أولًا قبل استخدام الذكاء الاصطناعي.",403);
     if(!env.GEMINI_API_KEY)return fail("مفتاح Google Gemini غير مضاف. أضف Secret باسم GEMINI_API_KEY في إعدادات Worker.",503);
-    const b=await bodyOf(request),image=String(b.image||""),match=image.match(/^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/);
-    if(!match||image.length>3000000)return fail("الصورة غير صالحة أو حجمها كبير. استخدم PNG أو JPG أو WEBP بحجم مناسب.",400);
+    const b=await bodyOf(request),image=String(b.image||"");
+    if(!/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(image)||image.length>3000000)return fail("الصورة غير صالحة أو حجمها كبير. استخدم PNG أو JPG أو WEBP بحجم مناسب.",400);
     try{
-     const prompt='استخرج كل أسئلة الاختبار الظاهرة في الصورة فقط. أعد JSON صالحًا دون Markdown بهذا الشكل: {"questions":[{"type":"mc","text":"نص السؤال","options":["الخيار 1","الخيار 2"],"correct":0,"points":1}]}. الأنواع: mc للاختيار المتعدد، tf للصواب والخطأ (options ["صح","خطأ"])، order للترتيب. لا تخترع أي محتوى. إذا لم تكن الإجابة الصحيحة ظاهرة فاجعل correct:null. حافظ على لغة الورقة ونصها.';
-     const response=await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",{method:"POST",headers:{"x-goog-api-key":env.GEMINI_API_KEY,"content-type":"application/json"},body:JSON.stringify({contents:[{role:"user",parts:[{text:prompt},{inline_data:{mime_type:match[1],data:match[2]}}]}],generationConfig:{temperature:0.1,responseMimeType:"application/json",maxOutputTokens:8192}})});
-     const data=await response.json();if(!response.ok){console.error("Gemini parse failed",response.status,data?.error?.status||data?.error?.code);return fail(data?.error?.message||"تعذر تحليل الورقة عبر Google Gemini",502)}
-     const output=(data.candidates?.[0]?.content?.parts||[]).map(x=>x.text||"").join("").trim();
-     if(!output)return fail("لم يُرجع Gemini نصًا قابلًا للقراءة. جرّب صورة أوضح.",422);
-     const parsed=JSON.parse(output),raw=Array.isArray(parsed.questions)?parsed.questions:[];
+     const comma=image.indexOf(","),mime=image.slice(5,image.indexOf(";")),imageData=image.slice(comma+1);
+     const prompt='استخرج أسئلة الاختبار الظاهرة في الصورة فقط. أعد JSON فقط بهذا الشكل: {"questions":[{"type":"mc","text":"نص السؤال","options":["الخيار 1","الخيار 2"],"correct":0,"points":1}]}. الأنواع: mc للاختيار المتعدد، tf للصواب والخطأ (options ["صح","خطأ"])، order للترتيب. لا تخترع أي محتوى. إذا لم تكن الإجابة الصحيحة ظاهرة فاجعل correct:null. حافظ على لغة الورقة ونصها. لا تضف أي شرح خارج JSON.';
+     const response=await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",{method:"POST",headers:{"x-goog-api-key":env.GEMINI_API_KEY,"content-type":"application/json"},body:JSON.stringify({systemInstruction:{parts:[{text:"أنت مساعد متخصص في قراءة أوراق الاختبارات. استخرج المحتوى بدقة وأعد JSON صالحًا فقط."}]},contents:[{role:"user",parts:[{text:prompt},{inlineData:{mimeType:mime,data:imageData}}]}],generationConfig:{temperature:0.1,responseMimeType:"application/json",maxOutputTokens:8192}})});
+     const data=await response.json();if(!response.ok){console.error("Gemini parse failed",response.status,data?.error?.status);return fail(response.status===400?"رفض Gemini الطلب. تحقق من نوع الصورة أو إعدادات المفتاح.":response.status===401||response.status===403?"مفتاح Gemini غير صالح أو لا يملك صلاحية استخدام Gemini API.":"تعذر الاتصال بخدمة Google Gemini.",502)}
+     const rawText=(data.candidates?.[0]?.content?.parts||[]).map(x=>x.text||"").join("").trim();
+     if(!rawText)return fail("لم يُرجع Gemini نصًا. جرّب صورة أوضح.",422);
+     const parsed=JSON.parse(rawText),raw=Array.isArray(parsed.questions)?parsed.questions:[];
      const questions=raw.map(q=>{
       const t=String(q.type||"mc").toLowerCase(),type=["tf","true_false","truefalse"].includes(t)?"tf":["order","ordering","sequence"].includes(t)?"order":"mc";
       const options=type==="tf"?["صح","خطأ"]:Array.isArray(q.options)?q.options.map(v=>String(v||"").trim()).filter(Boolean).slice(0,6):[];
@@ -253,7 +254,7 @@ export default {
      }).filter(q=>q.text&&q.options.length>=2);
      if(!questions.length)return fail("لم يتم العثور على أسئلة واضحة. جرّب صورة أكثر وضوحًا.",422);
      return json({questions,model:"gemini-2.5-flash",provider:"Google Gemini",reviewRequired:true});
-    }catch(e){console.error("Gemini question extraction error",e?.message||e);return fail("تعذر تحليل الصورة. تحقق من مفتاح Google Gemini أو جرّب صورة أوضح.",502)}
+    }catch(e){console.error("Gemini question extraction error",e?.message||e);return fail("تعذر تحليل الصورة عبر Gemini. تحقق من المفتاح أو جرّب صورة أوضح.",502)}
    }
    if(p==="/api/student/quizzes"&&method==="GET"){
     const u=await requireStudent(request,env);if(!u)return fail("سجّل الدخول بحساب طالب أولًا",401);
