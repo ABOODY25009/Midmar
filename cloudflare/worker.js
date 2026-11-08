@@ -229,10 +229,11 @@ export default {
    }
    if(p==="/api/ai/status"&&method==="GET"){
     const u=await requireTeacher(request,env);if(!u)return fail("هذه الصفحة مخصصة للمعلم",403);
-    return json({configured:!!env.OPENAI_API_KEY,provider:"OpenAI",model:"gpt-4o-mini"});
+    return json({configured:!!env.OPENAI_API_KEY,verified:!!u.email_verified,provider:"OpenAI",model:"gpt-4o-mini"});
    }
    if(p==="/api/ai/parse-sheet"&&method==="POST"){
     const u=await requireTeacher(request,env);if(!u)return fail("هذه العملية مخصصة للمعلم",403);
+    if(!u.email_verified)return fail("وثّق بريد حساب المعلم باستخدام Google أولًا قبل استخدام الذكاء الاصطناعي.",403);
     if(!env.OPENAI_API_KEY)return fail("مفتاح OpenAI غير مضاف. أضف Secret باسم OPENAI_API_KEY في إعدادات Worker.",503);
     const b=await bodyOf(request),image=String(b.image||"");
     if(!/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(image)||image.length>3000000)return fail("الصورة غير صالحة أو حجمها كبير. استخدم PNG أو JPG أو WEBP بحجم مناسب.",400);
@@ -252,7 +253,6 @@ export default {
      return json({questions,model:"gpt-4o-mini",reviewRequired:true});
     }catch(e){console.error("OpenAI question extraction error",e?.message||e);return fail("تعذر تحليل الصورة. تحقق من المفتاح أو جرّب صورة أوضح.",502)}
    }
-
    if(p==="/api/student/quizzes"&&method==="GET"){
     const u=await requireStudent(request,env);if(!u)return fail("سجّل الدخول بحساب طالب أولًا",401);
     if(!u.email_verified)return fail("وثّق بريدك الإلكتروني من الإعدادات باستخدام Google قبل المشاركة.",403);

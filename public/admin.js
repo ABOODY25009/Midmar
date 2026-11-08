@@ -218,7 +218,7 @@ async function studentGroups(M){
 }
 async function settings(M){
  const d=await api('/api/me');
- const ai=await api('/api/ai/status').catch(()=>({configured:false}));
+ const ai=await api('/api/ai/status').catch(()=>({configured:false,verified:!!d.email_verified}));const aiUsable=!!ai.configured&&!!ai.verified;
  const role=d.role==='student'?'طالب':'معلم';
  const provider=d.provider==='google'?'Google':'البريد وكلمة المرور';
  M.innerHTML=`<div class=section-heading><span class=eyebrow>التفضيلات والحساب</span><h1>الإعدادات</h1><p>تحكم في مظهر مِضمار وتفاصيل حسابك وخدماته.</p></div>
@@ -230,7 +230,7 @@ async function settings(M){
    ${!d.email_verified?'<a class="btn p" href="/auth/google?link=1">توثيق البريد باستخدام Google</a><small class="settings-hint">التوثيق مطلوب حتى يمكن إضافتك إلى مجموعات الطلاب.</small>':'<small class=settings-hint>حسابك جاهز للاستخدام.</small>'}
   </div></section>
   <section class=card settings-card ai-settings-card><div class=settings-icon>✦</div><div><h2>الذكاء الاصطناعي</h2><p>يستخدم مِضمار مفتاح OpenAI الخاص بك لقراءة أوراق الأسئلة بالصور.</p>
-   <p><b>حالة المفتاح:</b> <span class="ai-state ${ai.configured?'connected':'disconnected'}">${ai.configured?'مضاف ومربوط':'لم تتم إضافته بعد'}</span></p>
+   <p><b>حالة المفتاح:</b> <span class="ai-state ${aiUsable?'connected':'disconnected'}">${!ai.verified?'وثّق بريد المعلم أولًا':ai.configured?'مضاف ومربوط':'لم تتم إضافته بعد'}</span></p>
    <details class=ai-key-help><summary>طريقة إضافة مفتاح OpenAI</summary><ol>
     <li>افتح <a href="https://dash.cloudflare.com/b4ac92ac5a09c1d1516c1163ad62d9ab/workers/services/view/midmar-v2-dev/production/settings" target="_blank" rel="noopener">إعدادات Worker مِضمار في Cloudflare</a>.</li>
     <li>افتح <b>Settings</b> ثم <b>Variables and Secrets</b>.</li>
@@ -246,7 +246,7 @@ async function settings(M){
  applyTheme(currentTheme,false);
  document.querySelectorAll('[data-theme-choice]').forEach(x=>x.onclick=()=>applyTheme(x.dataset.themeChoice));
  $('#replayTour').onclick=showTour;
- $('#checkAiKey').onclick=async()=>{const b=$('#checkAiKey'),status=$('#aiKeyStatus');b.disabled=true;status.textContent='جارٍ التحقق...';try{const v=await api('/api/ai/status');status.textContent=v.configured?'تم العثور على مفتاح OpenAI وربطه بنجاح.':'لم يُعثر على المفتاح بعد.';const state=document.querySelector('.ai-state');if(state){state.textContent=v.configured?'مضاف ومربوط':'لم تتم إضافته بعد';state.classList.toggle('connected',v.configured);state.classList.toggle('disconnected',!v.configured)}}catch(e){status.textContent=e.message}finally{b.disabled=false}};
+ $('#checkAiKey').onclick=async()=>{const b=$('#checkAiKey'),status=$('#aiKeyStatus');b.disabled=true;status.textContent='جارٍ التحقق...';try{const v=await api('/api/ai/status');status.textContent=!v.verified?'وثّق بريد حساب المعلم باستخدام Google أولًا.':v.configured?'تم العثور على مفتاح OpenAI وربطه بنجاح.':'لم يُعثر على المفتاح بعد.';const state=document.querySelector('.ai-state');if(state){const ok=!!v.configured&&!!v.verified;state.textContent=!v.verified?'وثّق بريد المعلم أولًا':v.configured?'مضاف ومربوط':'لم تتم إضافته بعد';state.classList.toggle('connected',ok);state.classList.toggle('disconnected',!ok)}}catch(e){status.textContent=e.message}finally{b.disabled=false}};
 }
 
 const toMs=v=>v?new Date(v).getTime():null,fromMs=v=>v?new Date(v-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,16):'';
