@@ -183,7 +183,7 @@ export default {
     const school=await first(env,"SELECT id,status FROM schools WHERE id=?",id);if(!school)return fail("المدرسة غير موجودة",404);
     const stamp=now();
     await run(env,"UPDATE schools SET status=?,activated_at=?,activated_by=? WHERE id=?",status,status==="active"?stamp:null,status==="active"?u.id:null,id);
-    if(status==="active")await run(env,"UPDATE school_members SET status='active',joined_at=? WHERE school_id=? AND status='pending'",stamp,id);
+    if(status==="active")await run(env,"UPDATE school_members SET status='active',joined_at=? WHERE school_id=? AND status IN ('pending','suspended')",stamp,id);
     else await run(env,"UPDATE school_members SET status=? WHERE school_id=? AND status IN ('active','pending')",status==="suspended"?"suspended":"pending",id);
     await run(env,"INSERT INTO school_auth_events(school_id,user_id,event,provider,created_at) VALUES(?,?,?,?,?)",id,u.id,"school_"+action,u.provider||"",stamp);
     return json({ok:true,status});
