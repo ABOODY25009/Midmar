@@ -8,8 +8,10 @@ export const ASSETS = {"/":"<!doctype html><html lang=\"ar\" dir=\"rtl\"><head><
   try{
    const data=await api('/api/schools/me');
    const owned=(data.owned||[]).map(x=>'<p><b>'+esc(x.name)+'</b> — '+({pending:'بانتظار موافقة مدير المنصة',active:'مفعّلة',rejected:'مرفوضة',suspended:'معلّقة'}[x.status]||esc(x.status))+'</p>').join('');
-   const memberships=(data.memberships||[]).map(x=>'<p>'+esc(x.name)+' — '+(x.role==='school_admin'?'مدير المدرسة':x.role==='teacher'?'معلم':'طالب')+' · '+({pending:'قيد المراجعة',active:'نشط',suspended:'معلّق'}[x.member_status]||esc(x.member_status))+'</p>').join('');
+   const memberships=(data.memberships||[]).map(x=>'<div><p>'+esc(x.name)+' — '+(x.role==='school_admin'?'مدير المدرسة':x.role==='teacher'?'معلم':'طالب')+' · '+({pending:'قيد المراجعة',active:'نشط',suspended:'معلّق'}[x.member_status]||esc(x.member_status))+'</p>'+(x.role==='school_admin'&&x.member_status==='active'?'<div class=row><button class=btn data-school-members='+x.id+'>إدارة الأعضاء والدعوات</button><button class="btn p" data-school-invite='+x.id+' data-invite-role=teacher>دعوة معلم</button><button class=btn data-school-invite='+x.id+' data-invite-role=student>دعوة طالب</button></div>':'')+'</div>').join('');
    schoolList.innerHTML=(owned||memberships)?'<h3>مدارسك وعضوياتك</h3>'+owned+memberships:'<p>لا توجد مدارس مرتبطة بحسابك حتى الآن.</p>';
+   schoolList.querySelectorAll('[data-school-invite]').forEach(btn=>btn.onclick=async()=>{btn.disabled=true;try{const r=await api('/api/schools/invites','POST',{school_id:Number(btn.dataset.schoolInvite),role:btn.dataset.inviteRole});schoolError.textContent='رمز دعوة '+(r.role==='teacher'?'المعلم':'الطالب')+': '+r.code+' — صالح لمدة 7 أيام، شاركه مع المنضم فقط.'}catch(e){schoolError.textContent=e.message}finally{btn.disabled=false}});
+   schoolList.querySelectorAll('[data-school-members]').forEach(btn=>btn.onclick=async()=>{btn.disabled=true;try{const r=await api('/api/schools/members?school_id='+btn.dataset.schoolMembers);schoolError.textContent='الأعضاء: '+r.members.length+' · الدعوات: '+r.invites.length+' (عرض التفاصيل التفصيلية في سجل الإدارة).'}catch(e){schoolError.textContent=e.message}finally{btn.disabled=false}});
   }catch(e){schoolList.textContent=e.message}
  };
  refreshSchools();
