@@ -143,6 +143,93 @@ export default {
    if(p==="/api/me"){
     const u=await authUser(request,env);return json(u?{authenticated:true,id:u.id,student_id:u.role==="student"?"STD-"+String(u.id).padStart(6,"0"):null,user:u.username,name:u.display_name||u.email,email:u.email,provider:u.provider,role:u.role||"teacher",email_verified:!!u.email_verified}:{authenticated:false});
    }
+
+   const schoolHash=async value=>hex(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(String(value))));
+   const platformAdmin=async u=>!!(u&&await first(env,"SELECT user_id FROM platform_admins WHERE user_id=?",u.id));
+   const schoolAdmin=async(u,schoolId)=>!!(u&&await first(env,"SELECT 1 ok FROM school_members m JOIN schools s ON s.id=m.school_id WHERE m.school_id=? AND m.user_id=? AND m.role='school_admin' AND m.status='active' AND s.status='active'",schoolId,u.id));
+   if(p==="/api/schools/me"&&method==="GET"){
+    const u=await requireUser(request,env);if(!u)return fail("سجّل الدخول أولًا",401);
+    const rows=await all(env,"SELECT s.id,s.name,s.slug,s.city,s.status,m.role,m.status member_status,m.joined_at FROM school_members m JOIN schools s ON s.id=m.school_id WHERE m.user_id=? ORDER BY s.created_at DESC",u.id);
+    const owned=await all(env,"SELECT id,name,slug,city,status,created_at FROM schools WHERE admin_user_id=? ORDER BY created_at DESC",u.id);
+    return json({memberships:rows,owned});
+   }
+   if(p==="/api/schools"&&method==="POST"){
+    const u=await requireTeacher(request,env);if(!u)return fail("إنشاء مدرسة متاح لحساب المعلم",403);
+    const b=await bodyOf(request),name=String(b.name||"").trim().slice(0,120),city=String(b.city||"").trim().slice(0,80);
+    if(name.length<3)return fail("اسم المدرسة يجب ألا يقل عن 3 أحرف");
+    const exists=await first(env,"SELECT id FROM schools WHERE admin_user_id=? AND status IN ('pending','active')",u.id);
+    if(exists)return fail("لديك مدرسة قائمة أو طلب تفعيل قيد المراجعة",409);
+    const slug="school-"+token(6);
+    const created=now();
+    const result=await batch(env,[
+     stmt(env,"INSERT INTO schools(name,slug,city,status,admin_user_id,created_at) VALUES(?,?,?,'pending',?,?)",name,slug,city,u.id,created),
+     stmt(env,"INSERT INTO school_auth_events(school_id,user_id,event,provider,created_at) VALUES((SELECT id FROM schools WHERE slug=?),?,?,?,?)",slug,u.id,"school_created",u.provider||"",created)
+    ]);
+    const school=await first(env,"SELECT id,name,slug,city,status,created_at FROM schools WHERE slug=?",slug);
+    await run(env,"INSERT OR IGNORE INTO school_members(school_id,user_id,role,status,joined_at,invited_by) VALUES(?,?,'school_admin','pending',?,?)",school.id,u.id,created,u.id);
+    return json({ok:true,school,message:"تم إرسال طلب إنشاء المدرسة للمراجعة"},201);
+   }
+   if(p==="/api/platform/schools"&&method==="GET"){
+    const u=await requireUser(request,env);if(!u||!await platformAdmin(u))return fail("هذه الصفحة مخصصة لمدير المنصة",403);
+    const rows=await all(env,"SELECT s.*,t.display_name admin_name,t.email admin_email,(SELECT COUNT(*) FROM school_members m WHERE m.school_id=s.id) member_count FROM schools s JOIN teachers t ON t.id=s.admin_user_id ORDER BY CASE s.status WHEN 'pending' THEN 0 ELSE 1 END,s.created_at DESC");
+    return json({schools:rows});
+   }
+   if(p.startsWith("/api/platform/schools/")&&p.endsWith("/decision")&&method==="POST"){
+    const u=await requireUser(request,env);if(!u||!await platformAdmin(u))return fail("هذه العملية لمدير المنصة فقط",403);
+    const id=Number(p.split("/")[4]);if(!Number.isInteger(id)||id<1)return fail("معرّف المدرسة غير صحيح");
+    const b=await bodyOf(request),action=String(b.action||"");
+    const status=({activate:"active",reject:"rejected",suspend:"suspended"})[action];
+    if(!status)return fail("الإجراء غير صحيح");
+    const school=await first(env,"SELECT id,status FROM schools WHERE id=?",id);if(!school)return fail("المدرسة غير موجودة",404);
+    const stamp=now();
+    await run(env,"UPDATE schools SET status=?,activated_at=?,activated_by=? WHERE id=?",status,status==="active"?stamp:null,status==="active"?u.id:null,id);
+    if(status==="active")await run(env,"UPDATE school_members SET status='active',joined_at=? WHERE school_id=? AND status='pending'",stamp,id);
+    else await run(env,"UPDATE school_members SET status=? WHERE school_id=? AND status IN ('active','pending')",status==="suspended"?"suspended":"pending",id);
+    await run(env,"INSERT INTO school_auth_events(school_id,user_id,event,provider,created_at) VALUES(?,?,?,?,?)",id,u.id,"school_"+action,u.provider||"",stamp);
+    return json({ok:true,status});
+   }
+   if(p==="/api/schools/invites"&&method==="POST"){
+    const u=await requireUser(request,env);if(!u)return fail("سجّل الدخول أولًا",401);
+    const b=await bodyOf(request),schoolId=Number(b.school_id),role=String(b.role||"");
+    if(!Number.isInteger(schoolId)||schoolId<1||!["teacher","student"].includes(role))return fail("بيانات الدعوة غير صحيحة");
+    if(!await schoolAdmin(u,schoolId))return fail("يلزم أن تكون مدير المدرسة النشطة",403);
+    const maxUses=Math.max(1,Math.min(500,Number(b.max_uses)||100)),hours=Math.max(1,Math.min(8760,Number(b.expires_hours)||168));
+    const code=token(8),created=now(),expires=created+hours*3600000;
+    await run(env,"INSERT INTO school_invites(school_id,code_hash,role,max_uses,used_count,expires_at,created_by,created_at) VALUES(?,?,?,?,0,?,?,?)",schoolId,await schoolHash(code),role,maxUses,expires,u.id,created);
+    await run(env,"INSERT INTO school_auth_events(school_id,user_id,event,provider,created_at) VALUES(?,?,?,?,?)",schoolId,u.id,"invite_created:"+role,u.provider||"",created);
+    return json({ok:true,code,role,max_uses:maxUses,expires_at:expires},201);
+   }
+   if(p==="/api/schools/join"&&method==="POST"){
+    const u=await requireUser(request,env);if(!u)return fail("سجّل الدخول أولًا",401);
+    const b=await bodyOf(request),code=String(b.code||"").trim().toLowerCase();
+    if(!/^[a-f0-9]{16}$/.test(code))return fail("رمز الدعوة غير صحيح");
+    const invite=await first(env,"SELECT i.*,s.status school_status,s.name school_name FROM school_invites i JOIN schools s ON s.id=i.school_id WHERE i.code_hash=? AND i.revoked_at IS NULL AND (i.expires_at IS NULL OR i.expires_at>?) AND i.used_count<i.max_uses",await schoolHash(code),now());
+    if(!invite||invite.school_status!=="active")return fail("رمز الدعوة منتهي أو غير صالح أو المدرسة غير مفعّلة",404);
+    if(invite.role==="teacher"&&u.role!=="teacher"||invite.role==="student"&&u.role!=="student")return fail("نوع حسابك لا يطابق نوع الدعوة",403);
+    const existing=await first(env,"SELECT status FROM school_members WHERE school_id=? AND user_id=?",invite.school_id,u.id);
+    if(existing&&existing.status==="active")return fail("أنت عضو بالفعل في هذه المدرسة",409);
+    const stamp=now();
+    await run(env,"INSERT INTO school_members(school_id,user_id,role,status,joined_at,invited_by) VALUES(?,?,?,'active',?,?) ON CONFLICT(school_id,user_id) DO UPDATE SET role=excluded.role,status='active',joined_at=excluded.joined_at,invited_by=excluded.invited_by",invite.school_id,u.id,invite.role,stamp,invite.created_by);
+    const used=await run(env,"UPDATE school_invites SET used_count=used_count+1 WHERE id=? AND revoked_at IS NULL AND used_count<max_uses AND (expires_at IS NULL OR expires_at>?)",invite.id,stamp);
+    if(!used.meta?.changes)return fail("انتهى عدد مرات استخدام هذا الرمز",409);
+    await run(env,"INSERT INTO school_auth_events(school_id,user_id,event,provider,created_at) VALUES(?,?,?,?,?)",invite.school_id,u.id,"joined_as_"+invite.role,u.provider||"",stamp);
+    return json({ok:true,school:{id:invite.school_id,name:invite.school_name},role:invite.role});
+   }
+   if(p==="/api/schools/members"&&method==="GET"){
+    const u=await requireUser(request,env);if(!u)return fail("سجّل الدخول أولًا",401);
+    const schoolId=Number(url.searchParams.get("school_id"));
+    if(!Number.isInteger(schoolId)||schoolId<1||!await schoolAdmin(u,schoolId))return fail("يلزم صلاحية مدير المدرسة",403);
+    const members=await all(env,"SELECT m.user_id,m.role,m.status,m.joined_at,t.display_name,t.email,t.provider FROM school_members m JOIN teachers t ON t.id=m.user_id WHERE m.school_id=? ORDER BY CASE m.role WHEN 'school_admin' THEN 0 WHEN 'teacher' THEN 1 ELSE 2 END,m.joined_at",schoolId);
+    const invites=await all(env,"SELECT id,role,max_uses,used_count,expires_at,revoked_at,created_at FROM school_invites WHERE school_id=? ORDER BY created_at DESC",schoolId);
+    return json({members,invites});
+   }
+   if(p.startsWith("/api/schools/invites/")&&p.endsWith("/revoke")&&method==="POST"){
+    const u=await requireUser(request,env);if(!u)return fail("سجّل الدخول أولًا",401);
+    const id=Number(p.split("/")[4]),invite=await first(env,"SELECT id,school_id FROM school_invites WHERE id=?",id);
+    if(!invite||!await schoolAdmin(u,invite.school_id))return fail("الدعوة غير موجودة أو لا تملك صلاحيتها",403);
+    await run(env,"UPDATE school_invites SET revoked_at=? WHERE id=?",now(),id);
+    return json({ok:true});
+   }
    if(p==="/api/auth/register"&&method==="POST"){
     const b=await bodyOf(request),name=String(b.name||"").trim().slice(0,80),email=String(b.email||"").trim().toLowerCase(),password=String(b.password||""),role=String(b.role||"");
     if(!name)return fail("الاسم مطلوب");
