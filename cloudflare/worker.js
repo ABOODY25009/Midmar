@@ -209,10 +209,12 @@ export default {
     const existing=await first(env,"SELECT status FROM school_members WHERE school_id=? AND user_id=?",invite.school_id,u.id);
     if(existing&&existing.status==="active")return fail("أنت عضو بالفعل في هذه المدرسة",409);
     const stamp=now();
-    await run(env,"INSERT INTO school_members(school_id,user_id,role,status,joined_at,invited_by) VALUES(?,?,?,'active',?,?) ON CONFLICT(school_id,user_id) DO UPDATE SET role=excluded.role,status='active',joined_at=excluded.joined_at,invited_by=excluded.invited_by",invite.school_id,u.id,invite.role,stamp,invite.created_by);
-    const used=await run(env,"UPDATE school_invites SET used_count=used_count+1 WHERE id=? AND revoked_at IS NULL AND used_count<max_uses AND (expires_at IS NULL OR expires_at>?)",invite.id,stamp);
-    if(!used.meta?.changes)return fail("انتهى عدد مرات استخدام هذا الرمز",409);
-    await run(env,"INSERT INTO school_auth_events(school_id,user_id,event,provider,created_at) VALUES(?,?,?,?,?)",invite.school_id,u.id,"joined_as_"+invite.role,u.provider||"",stamp);
+    const result=await batch(env,[
+     stmt(env,"UPDATE school_invites SET used_count=used_count+1 WHERE id=? AND revoked_at IS NULL AND used_count<max_uses AND (expires_at IS NULL OR expires_at>?)",invite.id,stamp),
+     stmt(env,"INSERT INTO school_members(school_id,user_id,role,status,joined_at,invited_by) SELECT ?,?,?,'active',?,? WHERE changes()=1 ON CONFLICT(school_id,user_id) DO UPDATE SET role=excluded.role,status='active',joined_at=excluded.joined_at,invited_by=excluded.invited_by",invite.school_id,u.id,invite.role,stamp,invite.created_by),
+     stmt(env,"INSERT INTO school_auth_events(school_id,user_id,event,provider,created_at) SELECT ?,?,?,?,? WHERE changes()=1",invite.school_id,u.id,"joined_as_"+invite.role,u.provider||"",stamp)
+    ]);
+    if(!result[0]?.meta?.changes||!result[1]?.meta?.changes)return fail("انتهى عدد مرات استخدام هذا الرمز",409);
     return json({ok:true,school:{id:invite.school_id,name:invite.school_name},role:invite.role});
    }
    if(p==="/api/schools/members"&&method==="GET"){
