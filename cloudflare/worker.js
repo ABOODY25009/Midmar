@@ -161,12 +161,12 @@ export default {
     if(exists)return fail("لديك مدرسة قائمة أو طلب تفعيل قيد المراجعة",409);
     const slug="school-"+token(6);
     const created=now();
-    const result=await batch(env,[
+    await batch(env,[
      stmt(env,"INSERT INTO schools(name,slug,city,status,admin_user_id,created_at) VALUES(?,?,?,'pending',?,?)",name,slug,city,u.id,created),
+     stmt(env,"INSERT INTO school_members(school_id,user_id,role,status,joined_at,invited_by) SELECT id,?,'school_admin','pending',?,? FROM schools WHERE slug=?",u.id,created,u.id,slug),
      stmt(env,"INSERT INTO school_auth_events(school_id,user_id,event,provider,created_at) VALUES((SELECT id FROM schools WHERE slug=?),?,?,?,?)",slug,u.id,"school_created",u.provider||"",created)
     ]);
     const school=await first(env,"SELECT id,name,slug,city,status,created_at FROM schools WHERE slug=?",slug);
-    await run(env,"INSERT OR IGNORE INTO school_members(school_id,user_id,role,status,joined_at,invited_by) VALUES(?,?,'school_admin','pending',?,?)",school.id,u.id,created,u.id);
     return json({ok:true,school,message:"تم إرسال طلب إنشاء المدرسة للمراجعة"},201);
    }
    if(p==="/api/platform/schools"&&method==="GET"){
